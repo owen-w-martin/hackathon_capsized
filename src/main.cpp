@@ -14,7 +14,7 @@ void setup() {
     Serial.begin(115200);
     blinkySetup();
     display.begin();
-    game.render();
+    game.processDisplayUpdates();
     printToSerial(display);
 }
 
