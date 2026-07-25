@@ -15,7 +15,6 @@ namespace core {
 class Game {
 public:
     explicit Game(Display& display) : m_display(display) {}
-    void render() { processDisplayUpdates(); }
 
     enum class Axis { X, Y };
 

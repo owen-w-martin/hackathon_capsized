@@ -15,12 +15,12 @@ int wrapToAxis(int32_t v, int size) {
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
     Cursor& c = (p == Player::P1) ? m_p1 : m_p2;
     (axis == Axis::X ? c.x : c.y) += delta;
-    render();
+    processDisplayUpdates();
 }
 
 void Game::onButtonInput(bool pressed) {
     m_button = pressed;
-    render();
+    processDisplayUpdates();
 }
 
 void Game::processDisplayUpdates() {
