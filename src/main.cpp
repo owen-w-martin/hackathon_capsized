@@ -16,7 +16,7 @@ enum class GameState {
     PLAYING,
     ENDSCREEN
 };
-GameState state = GameState::IDLE;
+GameState state;
 
 void setup() {
     Serial.begin(115200);
@@ -57,9 +57,6 @@ void loop() {
             break;
     }
     
-    // -- update what should be on the display --
-    game.processDisplayUpdates();
-
     // -- actually write to the display --  
     display.show();
 

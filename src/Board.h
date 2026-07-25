@@ -62,4 +62,5 @@ private:
     std::vector<Capacitor> P1_caps;
     std::vector<Capacitor> P2_caps;
     BoardStatus status;
+    std::pair<int, int> target(std::pair<int, int> pos) const;
 };
