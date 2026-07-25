@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-#include "Types.h"
+#include "../Display.h"
 
 // Shared wire format for raw hardware I/O -- a shared button and, per
 // player, two rotary encoders (left/right, up/down) in; a display-state
@@ -21,10 +21,7 @@ struct InputEvent {
 bool parseLine(const std::string& line, InputEvent& out, std::string& err);
 
 // "S <144x 6-hex P1 pixels> <144x 6-hex P2 pixels> <12x 6-hex bar pixels>"
-// Encodes whatever is passed in -- doesn't care whether it came from
-// core::Game or was read back from the real Display, so both the
-// cursor/button harness and any animation running on top of it can be
-// mirrored the same way.
-std::string encodeState(const core::DisplayState& d);
+// Reads whatever is currently on display -- doesn't care what put it there.
+std::string encodeState(const Display& display);
 
 }

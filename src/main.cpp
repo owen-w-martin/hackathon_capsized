@@ -8,22 +8,14 @@
 #define FRAMERATE 30
 
 Display display;
-core::Game game;
-
-namespace {
-
-void refreshDisplays() {
-    display.draw(game);
-    printToSerial(game.display());
-}
-
-}  // namespace
+core::Game game(display);
 
 void setup() {
     Serial.begin(115200);
     blinkySetup();
     display.begin();
-    refreshDisplays();
+    game.render();
+    printToSerial(display);
 }
 
 void loop() {
@@ -33,6 +25,18 @@ void loop() {
     lastFrameMs = nowMs;
 
     blinkyUpdate();
+    
+    // -- get inputs -- 
+    // debug: get inputs from serial, aka laptop
     pollAndApplySerial(game);
-    refreshDisplays();
+    // todo: get inputs form hardware
+    
+    // -- update what should be on the display --
+    game.processDisplayUpdates();
+
+    // -- actually write to the display --  
+    display.show();
+
+    // debug: push to serial as well so we can view on laptop
+    printToSerial(display);
 }

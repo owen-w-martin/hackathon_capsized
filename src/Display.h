@@ -3,8 +3,6 @@
 #include <Arduino.h>
 #include <FastLED.h>
 
-namespace core { class Game; }
-
 // ============================================================================
 //  CONFIG  —  set these to match your physical build.
 // ============================================================================
@@ -79,6 +77,7 @@ public:
     CRGB&       operator[](int i)       { return _buf[i]; }
     const CRGB& operator[](int i) const { return _buf[i]; }
     CRGB&       operator()(int i)       { return _buf[i]; }
+    const CRGB& operator()(int i) const { return _buf[i]; }
 
     void        set(int i, CRGB c) { if ((unsigned)i < (unsigned)cfg::SCREEN_W) _buf[i] = c; }
     void        fill(CRGB c)       { for (auto& p : _buf) p = c; }
@@ -103,15 +102,14 @@ public:
     void clear();      // blank all regions
     void show();       // map every region into the strip, then output  -- TODO
 
-    // Draws game's current DisplayState onto the strip.
-    void draw(const core::Game& game);
-
     // Parameterized, array-like access: pick a player, then index the screen.
     //   display.player(P1)(x, y) = CRGB::Red;
     //   display[P1][y][x]       += CRGB(5, 5, 5);
-    PlayerScreen& player(Player p)     { return (p == P1) ? _p1 : _p2; }
+    PlayerScreen&       player(Player p)       { return (p == P1) ? _p1 : _p2; }
+    const PlayerScreen& player(Player p) const { return (p == P1) ? _p1 : _p2; }
     PlayerScreen& operator[](Player p) { return player(p); }
-    LightBar&     bar()                { return _bar; }
+    LightBar&       bar()       { return _bar; }
+    const LightBar& bar() const { return _bar; }
 
     void setBrightness(uint8_t b)     { FastLED.setBrightness(b); }
     void setMaxMilliamps(uint32_t ma) { FastLED.setMaxPowerInVoltsAndMilliamps(cfg::VOLTS, ma); }

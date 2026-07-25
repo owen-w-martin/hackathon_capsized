@@ -56,6 +56,6 @@ bool pollAndApplySerial(core::Game& game) {
     return false;
 }
 
-void printToSerial(const core::DisplayState& d) {
-    Serial.println(protocol::encodeState(d).c_str());
+void printToSerial(const Display& display) {
+    Serial.println(protocol::encodeState(display).c_str());
 }

@@ -23,13 +23,20 @@ void Game::onButtonInput(bool pressed) {
     render();
 }
 
-void Game::render() {
-    m_displayState = DisplayState{};
-    m_displayState.p1[wrapToAxis(m_p1.y, cfg::SCREEN_H)][wrapToAxis(m_p1.x, cfg::SCREEN_W)] = CRGB(0, 255, 255);    // P1: cyan
-    m_displayState.p2[wrapToAxis(m_p2.y, cfg::SCREEN_H)][wrapToAxis(m_p2.x, cfg::SCREEN_W)] = CRGB(255, 140, 0);   // P2: orange
+void Game::processDisplayUpdates() {
+    m_display.clear();
+
+    int p1x = wrapToAxis(m_p1.x, cfg::SCREEN_W);
+    int p1y = wrapToAxis(m_p1.y, cfg::SCREEN_H);
+    m_display.player(P1)(p1x, p1y) = CRGB(0, 255, 255);    // P1: cyan
+
+    int p2x = wrapToAxis(m_p2.x, cfg::SCREEN_W);
+    int p2y = wrapToAxis(m_p2.y, cfg::SCREEN_H);
+    m_display.player(P2)(p2x, p2y) = CRGB(255, 140, 0);   // P2: orange
 
     CRGB barColor = m_button ? CRGB(255, 0, 0) : CRGB::Black;
-    for (auto& c : m_displayState.bar) c = barColor;
+    for (int i = 0; i < cfg::SCREEN_W; i++) m_display.bar()(i) = barColor;
+
 }
 
 }

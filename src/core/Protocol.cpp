@@ -11,18 +11,18 @@ static std::string hex(const CRGB& c) {
     return std::string(buf, 6);
 }
 
-std::string encodeState(const core::DisplayState& d) {
+std::string encodeState(const Display& display) {
     std::string out = "S ";
     for (int y = 0; y < cfg::SCREEN_H; y++)
         for (int x = 0; x < cfg::SCREEN_W; x++)
-            out += hex(d.p1[y][x]);
+            out += hex(display.player(P1)(x, y));
     out += " ";
     for (int y = 0; y < cfg::SCREEN_H; y++)
         for (int x = 0; x < cfg::SCREEN_W; x++)
-            out += hex(d.p2[y][x]);
+            out += hex(display.player(P2)(x, y));
     out += " ";
     for (int x = 0; x < cfg::SCREEN_W; x++)
-        out += hex(d.bar[x]);
+        out += hex(display.bar()(x));
 
     return out;
 }
