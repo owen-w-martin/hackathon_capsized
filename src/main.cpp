@@ -10,12 +10,22 @@
 Display display;
 core::Game game(display);
 
+enum class GameState {
+    IDLE,
+    SHIPSELECT,
+    PLAYING,
+    ENDSCREEN
+};
+GameState state = GameState::IDLE;
+
 void setup() {
     Serial.begin(115200);
     blinkySetup();
     display.begin();
     game.processDisplayUpdates();
     printToSerial(display);
+
+    state = GameState::IDLE;
 }
 
 void loop() {
@@ -23,13 +33,29 @@ void loop() {
     uint32_t nowMs = millis();
     if (nowMs - lastFrameMs < 1000 / FRAMERATE) return;
     lastFrameMs = nowMs;
-
     blinkyUpdate();
     
     // -- get inputs -- 
     // debug: get inputs from serial, aka laptop
     pollAndApplySerial(game);
     // todo: get inputs form hardware
+
+    display.clear();
+
+    switch (state) {
+        case GameState::IDLE:
+            
+            break;
+        case GameState::SHIPSELECT:
+            
+            break;
+        case GameState::PLAYING:
+            
+            break;
+        case GameState::ENDSCREEN:
+            
+            break;
+    }
     
     // -- update what should be on the display --
     game.processDisplayUpdates();
@@ -40,3 +66,4 @@ void loop() {
     // debug: push to serial as well so we can view on laptop
     printToSerial(display);
 }
+

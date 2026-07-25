@@ -1,19 +1,65 @@
 #pragma once
 
-#include "Display.h"
+#include <utility>
+#include <vector>
 
-// Placeholder for whatever a single player's board actually holds.
-class PlayerBoard {
+#include "Display.h"
+#include "Hardware.h"
+
+namespace cfg {
+    constexpr int BOARD_W = 10;       // per-player grid width  (cells)
+    constexpr int BOARD_H = 10;       // per-player grid height (cells)
+
+    // TODO: calibrate against real hardware -- an intact capacitor should
+    // read close to the ~200mA detection current; a popped one should read
+    // close to 0.
+    constexpr float POPPED_THRESHOLD_MA = 50.0f;
+}
+
+enum class BoardStatus {
+    IDLE,
+    CHARGING,
+};
+
+enum class CapStatus {
+    INTACT,
+    POPPED,
+    FAULTY
+};
+
+class Capacitor {
 public:
-    PlayerBoard();
+    Capacitor(std::pair<int, int> pos);
+
+    std::pair<int, int> getPosition() const;
+    CapStatus           getStatus() const;
+    void                setPopped();
+    void                setFaulty();
+
+private:
+    std::pair<int, int> position;
+    CapStatus           status;
 };
 
 class Board {
 public:
     Board();
 
-    PlayerBoard& operator[](Player p) { return (p == P1) ? _p1 : _p2; }
+    void update();
+
+    void scanBoard();
+
+    std::vector<std::pair<int, int>> getCapPositions(Player p) const;
+
+    void popCap(std::pair<int, int> pos);
+
+    CapStatus getCapStatus(std::pair<int, int> pos);
+
+    BoardStatus getStatus() const { return status; }
 
 private:
-    PlayerBoard _p1, _p2;
+    Hardware hardware;
+    std::vector<Capacitor> P1_caps;
+    std::vector<Capacitor> P2_caps;
+    BoardStatus status;
 };

@@ -1,8 +1,11 @@
 #include "Ship.h"
 
+#include <algorithm>
+
 Ship::Ship(const std::vector<std::pair<int, int>> coords) {
     this->coords = coords;
-    health.resize(coords.size(), true); // Initialize all parts as healthy
+    std::sort(this->coords.begin(), this->coords.end()); // pair's operator< already orders by X then Y
+    health.resize(this->coords.size(), true); // Initialize all parts as healthy
 }
 
 bool Ship::checkHit(std::pair<int, int> shot) {
