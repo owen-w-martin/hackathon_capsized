@@ -32,10 +32,10 @@ bool parseLine(const std::string& line, InputEvent& out, std::string& err) {
     std::string cmd;
     if (!(ss >> cmd)) { err = "EMPTY"; return false; }
 
-    if (cmd == "BTN") {
+    if (cmd == "BTN1" || cmd == "BTN2") {
         int v;
         if (!(ss >> v)) { err = "BAD_ARG"; return false; }
-        out.type = InputEvent::Type::Button;
+        out.type = (cmd == "BTN1") ? InputEvent::Type::Button1 : InputEvent::Type::Button2;
         out.buttonPressed = (v != 0);
         return true;
     }

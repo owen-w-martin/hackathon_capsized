@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-"""Mirrors the Teensy's LED display and simulates the button + each
-player's two rotary encoders (left/right, up/down) over its real USB
-serial port -- for when the physical display and/or encoders aren't
-attached to the board.
+"""Mirrors the Teensy's LED display and simulates each player's two rotary
+encoders (left/right, up/down) and button over its real USB serial port --
+for when the physical display and/or controls aren't attached to the board.
 
 Talks the same line protocol the Teensy speaks over Serial:
-  in:  BTN <0|1>, ENC1X/ENC1Y/ENC2X/ENC2Y <delta>
+  in:  BTN1/BTN2 <0|1>, ENC1X/ENC1Y/ENC2X/ENC2Y <delta>
   out: S <144x 6-hex P1 pixels> <144x 6-hex P2 pixels> <12x 6-hex bar pixels>
 
 Usage:
   python3 tools/display_mirror.py --port /dev/ttyACM0 --baud 115200
 
 Controls:
-  Arrow keys -- P1 encoders (left/right, up/down)
-  WASD       -- P2 encoders (left/right, up/down)
-  Space      -- button
+  Arrow keys -- P1 encoders (left/right, up/down)    Space     -- P1 button
+  WASD       -- P2 encoders (left/right, up/down)    Left Shift -- P2 button
 """
 
 import argparse
@@ -166,10 +164,14 @@ def main():
                     elif event.key == pygame.K_s:
                         source.write_line("ENC2Y 1")
                     elif event.key == pygame.K_SPACE:
-                        source.write_line("BTN 1")
+                        source.write_line("BTN1 1")
+                    elif event.key == pygame.K_LSHIFT:
+                        source.write_line("BTN2 1")
                 elif event.type == pygame.KEYUP:
                     if event.key == pygame.K_SPACE:
-                        source.write_line("BTN 0")
+                        source.write_line("BTN1 0")
+                    elif event.key == pygame.K_LSHIFT:
+                        source.write_line("BTN2 0")
 
             try:
                 frame = state_queue.get_nowait()
@@ -182,7 +184,7 @@ def main():
             draw_bar(screen, bar_origin, grid_w * 2 + GAP, frame["bar"])
 
             legend = font.render(
-                "Arrows: P1 (L/R, U/D)    WASD: P2 (L/R, U/D)    Space: button    Esc: quit",
+                "Arrows/Space: P1    WASD/LShift: P2    Esc: quit",
                 True, (200, 200, 200),
             )
             screen.blit(legend, (MARGIN, legend_y))

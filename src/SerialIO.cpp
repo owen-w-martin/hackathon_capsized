@@ -11,8 +11,11 @@ std::string buf;
 
 void apply(core::Game& game, const protocol::InputEvent& ev) {
     switch (ev.type) {
-        case protocol::InputEvent::Type::Button:
-            game.onButtonInput(ev.buttonPressed);
+        case protocol::InputEvent::Type::Button1:
+            game.onButtonInput(core::Player::P1, ev.buttonPressed);
+            break;
+        case protocol::InputEvent::Type::Button2:
+            game.onButtonInput(core::Player::P2, ev.buttonPressed);
             break;
         case protocol::InputEvent::Type::Enc1X:
             game.onEncoderInput(core::Player::P1, core::Game::Axis::X, ev.encoderDelta);

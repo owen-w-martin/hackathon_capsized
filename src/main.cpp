@@ -2,6 +2,7 @@
 
 #include "Blinky.h"
 #include "Display.h"
+#include "HardwareIO.h"
 #include "SerialIO.h"
 #include "core/Game.h"
 
@@ -14,6 +15,7 @@ void setup() {
     Serial.begin(115200);
     blinkySetup();
     display.begin();
+    hardwareIOBegin();
     game.processDisplayUpdates();
     printToSerial(display);
 }
@@ -29,7 +31,8 @@ void loop() {
     // -- get inputs -- 
     // debug: get inputs from serial, aka laptop
     pollAndApplySerial(game);
-    // todo: get inputs form hardware
+    // get inputs from the physical button + encoder
+    pollAndApplyHardware(game);
     
     // -- update what should be on the display --
     game.processDisplayUpdates();
@@ -38,5 +41,5 @@ void loop() {
     display.show();
 
     // debug: push to serial as well so we can view on laptop
-    printToSerial(display);
+    // printToSerial(display);
 }
