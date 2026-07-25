@@ -1,8 +1,6 @@
 #include "HardwareIO.h"
 
 #include <Arduino.h>
-#include <Encoder.h>
-#include <cstdio>
 
 namespace {
 
@@ -29,26 +27,27 @@ constexpr uint8_t P1_FIRE = 24;
 
 constexpr uint32_t DEBOUNCE_US = 5000;   // 5ms
 
-// PEC11R-style detent encoders click once per full electrical (quadrature)
-// cycle, and the Encoder library counts all 4 edges of that cycle -- so 4
-// raw counts per detent. If yours turns out to detent every half-cycle
-// instead (2 raw counts per click), change this to 2. Use the ENC_RAW debug
-// print below to check: turn one encoder exactly one detent and see how
-// much its raw count actually moved.
-constexpr int32_t COUNTS_PER_DETENT = 4;
-
+// One tick per detent: triggered on A's rising edge, B's level gives direction.
 // X = L encoder, Y = R encoder.
-Encoder g_p1EncX(P1_ENC_L_A, P1_ENC_L_B);
-Encoder g_p1EncY(P1_ENC_R_A, P1_ENC_R_B);
-Encoder g_p2EncX(P2_ENC_L_A, P2_ENC_L_B);
-Encoder g_p2EncY(P2_ENC_R_A, P2_ENC_R_B);
+volatile int32_t g_p1EncXDelta = 0;
+volatile int32_t g_p1EncYDelta = 0;
+volatile int32_t g_p2EncXDelta = 0;
+volatile int32_t g_p2EncYDelta = 0;
 
-// Last raw count consumed into a whole detent, per encoder -- any leftover
-// partial-cycle remainder is kept for next time rather than dropped.
-int32_t g_p1EncXBase = 0;
-int32_t g_p1EncYBase = 0;
-int32_t g_p2EncXBase = 0;
-int32_t g_p2EncYBase = 0;
+// DEBUG: one fire-count per physical pin -- including the B channels, which
+// the movement logic never used to watch. If a pin that shouldn't be
+// involved lights up when you turn a different encoder, that pin/wire is
+// picking up something it shouldn't.
+volatile uint32_t g_p1EncXACount = 0;   // P1_ENC_L_A
+volatile uint32_t g_p1EncXBCount = 0;   // P1_ENC_L_B
+volatile uint32_t g_p1EncYACount = 0;   // P1_ENC_R_A
+volatile uint32_t g_p1EncYBCount = 0;   // P1_ENC_R_B
+volatile uint32_t g_p2EncXACount = 0;   // P2_ENC_L_A
+volatile uint32_t g_p2EncXBCount = 0;   // P2_ENC_L_B
+volatile uint32_t g_p2EncYACount = 0;   // P2_ENC_R_A
+volatile uint32_t g_p2EncYBCount = 0;   // P2_ENC_R_B
+volatile uint32_t g_p1FireCount  = 0;   // P1_FIRE
+volatile uint32_t g_p2FireCount  = 0;   // P2_FIRE
 
 volatile bool     g_p1ButtonPressed    = false;
 volatile bool     g_p1ButtonChanged    = false;
@@ -58,8 +57,21 @@ volatile bool     g_p2ButtonPressed    = false;
 volatile bool     g_p2ButtonChanged    = false;
 volatile uint32_t g_p2ButtonLastMicros = 0;
 
+// A-channel ISRs drive real movement (RISING only) and count their own fires.
+void p1EncXISR_A() { g_p1EncXACount++; g_p1EncXDelta += (digitalRead(P1_ENC_L_B) == HIGH) ? 1 : -1; }
+void p1EncYISR_A() { g_p1EncYACount++; g_p1EncYDelta += (digitalRead(P1_ENC_R_B) == HIGH) ? 1 : -1; }
+void p2EncXISR_A() { g_p2EncXACount++; g_p2EncXDelta += (digitalRead(P2_ENC_L_B) == HIGH) ? 1 : -1; }
+void p2EncYISR_A() { g_p2EncYACount++; g_p2EncYDelta += (digitalRead(P2_ENC_R_B) == HIGH) ? 1 : -1; }
+
+// B-channel ISRs are diagnostic only -- they don't drive movement, just count.
+void p1EncXISR_B() { g_p1EncXBCount++; }
+void p1EncYISR_B() { g_p1EncYBCount++; }
+void p2EncXISR_B() { g_p2EncXBCount++; }
+void p2EncYISR_B() { g_p2EncYBCount++; }
+
 // Debounced in the ISR itself so callers never see a bounce as a real change.
 void p1ButtonISR() {
+    g_p1FireCount++;
     uint32_t now = micros();
     if (now - g_p1ButtonLastMicros < DEBOUNCE_US) return;
     g_p1ButtonLastMicros = now;
@@ -69,6 +81,7 @@ void p1ButtonISR() {
 }
 
 void p2ButtonISR() {
+    g_p2FireCount++;
     uint32_t now = micros();
     if (now - g_p2ButtonLastMicros < DEBOUNCE_US) return;
     g_p2ButtonLastMicros = now;
@@ -77,63 +90,77 @@ void p2ButtonISR() {
     g_p2ButtonChanged = true;
 }
 
-// Returns whole detents moved since last call; keeps any partial-cycle
-// remainder in base so it isn't lost across polls.
-int32_t consumeDetents(Encoder& enc, int32_t& base) {
-    int32_t now = enc.read();
-    int32_t detents = (now - base) / COUNTS_PER_DETENT;
-    base += detents * COUNTS_PER_DETENT;
-    return detents;
-}
+// DEBUG: every loop, prints each pin's total (cumulative, never-reset) fire
+// count, by name, on one line -- without ever calling Serial from inside an
+// ISR (unsafe/slow). Turn one encoder and watch exactly which name's count
+// keeps climbing.
+void debugPrintAllCounts() {
+    struct Watch { const char* name; volatile uint32_t* count; };
+    static const Watch watches[] = {
+        {"P1_ENC_L_A", &g_p1EncXACount},
+        {"P1_ENC_L_B", &g_p1EncXBCount},
+        {"P1_ENC_R_A", &g_p1EncYACount},
+        {"P1_ENC_R_B", &g_p1EncYBCount},
+        {"P2_ENC_L_A", &g_p2EncXACount},
+        {"P2_ENC_L_B", &g_p2EncXBCount},
+        {"P2_ENC_R_A", &g_p2EncYACount},
+        {"P2_ENC_R_B", &g_p2EncYBCount},
+        {"P1_FIRE",    &g_p1FireCount},
+        {"P2_FIRE",    &g_p2FireCount},
+    };
 
-// DEBUG: change in each encoder's raw count since the last print, twice a
-// second -- idle shows all zeros; turning one encoder should light up
-// exactly one column. Also use this to confirm/tune COUNTS_PER_DETENT
-// above: turn one encoder exactly one detent and see how much it moved.
-void debugPrintRawCounts() {
-    static uint32_t lastPrintMs = 0;
-    static int32_t  lastP1x = 0, lastP1y = 0, lastP2x = 0, lastP2y = 0;
+    for (const Watch& w : watches) {
+        noInterrupts();
+        uint32_t current = *w.count;
+        interrupts();
 
-    uint32_t nowMs = millis();
-    if (nowMs - lastPrintMs < 500) return;
-    lastPrintMs = nowMs;
-
-    int32_t p1x = g_p1EncX.read();
-    int32_t p1y = g_p1EncY.read();
-    int32_t p2x = g_p2EncX.read();
-    int32_t p2y = g_p2EncY.read();
-
-    char buf[64];
-    std::snprintf(buf, sizeof(buf), "ENC_RAW  P1 x=%5ld y=%5ld  |  P2 x=%5ld y=%5ld",
-                  static_cast<long>(p1x - lastP1x), static_cast<long>(p1y - lastP1y),
-                  static_cast<long>(p2x - lastP2x), static_cast<long>(p2y - lastP2y));
-    Serial.println(buf);
-
-    lastP1x = p1x; lastP1y = p1y; lastP2x = p2x; lastP2y = p2y;
+        Serial.print(w.name);
+        Serial.print("=");
+        Serial.print(current);
+        Serial.print("  ");
+    }
+    Serial.println();
 }
 
 }  // namespace
 
 void hardwareIOBegin() {
     pinMode(P1_FIRE, INPUT_PULLUP);
+    pinMode(P1_ENC_R_A, INPUT_PULLUP);
+    pinMode(P1_ENC_R_B, INPUT_PULLUP);
+    pinMode(P1_ENC_L_A, INPUT_PULLUP);
+    pinMode(P1_ENC_L_B, INPUT_PULLUP);
+
     pinMode(P2_FIRE, INPUT_PULLUP);
+    pinMode(P2_ENC_R_A, INPUT_PULLUP);
+    pinMode(P2_ENC_R_B, INPUT_PULLUP);
+    pinMode(P2_ENC_L_A, INPUT_PULLUP);
+    pinMode(P2_ENC_L_B, INPUT_PULLUP);
 
     attachInterrupt(digitalPinToInterrupt(P1_FIRE), p1ButtonISR, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(P2_FIRE), p2ButtonISR, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(P1_ENC_L_A), p1EncXISR_A, RISING);
+    attachInterrupt(digitalPinToInterrupt(P1_ENC_L_B), p1EncXISR_B, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(P1_ENC_R_A), p1EncYISR_A, RISING);
+    attachInterrupt(digitalPinToInterrupt(P1_ENC_R_B), p1EncYISR_B, CHANGE);
 
-    // Encoder objects configure their own pins and interrupts internally.
+    attachInterrupt(digitalPinToInterrupt(P2_FIRE), p2ButtonISR, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(P2_ENC_L_A), p2EncXISR_A, RISING);
+    attachInterrupt(digitalPinToInterrupt(P2_ENC_L_B), p2EncXISR_B, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(P2_ENC_R_A), p2EncYISR_A, RISING);
+    attachInterrupt(digitalPinToInterrupt(P2_ENC_R_B), p2EncYISR_B, CHANGE);
 }
 
 bool pollAndApplyHardware(core::Game& game) {
-    debugPrintRawCounts();
+    debugPrintAllCounts();
 
-    int32_t p1x = consumeDetents(g_p1EncX, g_p1EncXBase);
-    int32_t p1y = consumeDetents(g_p1EncY, g_p1EncYBase);
-    int32_t p2x = consumeDetents(g_p2EncX, g_p2EncXBase);
-    int32_t p2y = consumeDetents(g_p2EncY, g_p2EncYBase);
-
+    int32_t p1x, p1y, p2x, p2y;
     bool p1BtnChanged, p1BtnPressed, p2BtnChanged, p2BtnPressed;
+
     noInterrupts();
+    p1x = g_p1EncXDelta; g_p1EncXDelta = 0;
+    p1y = g_p1EncYDelta; g_p1EncYDelta = 0;
+    p2x = g_p2EncXDelta; g_p2EncXDelta = 0;
+    p2y = g_p2EncYDelta; g_p2EncYDelta = 0;
     p1BtnChanged = g_p1ButtonChanged; g_p1ButtonChanged = false; p1BtnPressed = g_p1ButtonPressed;
     p2BtnChanged = g_p2ButtonChanged; g_p2ButtonChanged = false; p2BtnPressed = g_p2ButtonPressed;
     interrupts();
