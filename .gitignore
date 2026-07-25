@@ -73,3 +73,7 @@ Testing/
 
 # Python venv
 .venv/
+
+
+# platformio
+.pio/

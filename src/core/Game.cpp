@@ -13,13 +13,15 @@ int wrapToAxis(int32_t v, int size) {
 }  // namespace
 
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
-    Cursor& c = (p == Player::P1) ? m_p1 : m_p2;
-    (axis == Axis::X ? c.x : c.y) += delta;
+    PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
+    int32_t step = (delta > 0) ? 1 : -1;   // any rotation this way moves exactly one block
+    (axis == Axis::X ? in.x : in.y) += step;
     processDisplayUpdates();
 }
 
-void Game::onButtonInput(bool pressed) {
-    m_button = pressed;
+void Game::onButtonInput(Player p, bool pressed) {
+    PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
+    in.button = pressed;
     processDisplayUpdates();
 }
 
@@ -34,9 +36,12 @@ void Game::processDisplayUpdates() {
     int p2y = wrapToAxis(m_p2.y, cfg::SCREEN_H);
     m_display.player(P2)(p2x, p2y) = CRGB(255, 140, 0);   // P2: orange
 
-    CRGB barColor = m_button ? CRGB(255, 0, 0) : CRGB::Black;
-    for (int i = 0; i < cfg::SCREEN_W; i++) m_display.bar()(i) = barColor;
-
+    // Bar is split in half: left reflects P1's button, right reflects P2's.
+    CRGB p1BarColor = m_p1.button ? CRGB(255, 0, 0) : CRGB::Black;
+    CRGB p2BarColor = m_p2.button ? CRGB(255, 0, 0) : CRGB::Black;
+    int half = cfg::SCREEN_W / 2;
+    for (int i = 0; i < half; i++)             m_display.bar()(i) = p1BarColor;
+    for (int i = half; i < cfg::SCREEN_W; i++) m_display.bar()(i) = p2BarColor;
 }
 
 }
