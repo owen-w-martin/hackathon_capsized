@@ -1,29 +1,38 @@
 #include <Arduino.h>
-#include <FastLED.h>
+
+#include "Blinky.h"
 #include "Display.h"
-#include "Animations.h"   // animPlasma / animDinner / animTetris / animFace / animRadar / animBadApple / animConwayLife
+#include "SerialIO.h"
+#include "core/Game.h"
 
 #define FRAMERATE 30
 
 Display display;
+core::Game game;
+
+namespace {
+
+void refreshDisplays() {
+    display.draw(game);
+    printToSerial(game.display());
+}
+
+}  // namespace
 
 void setup() {
-  display.begin();
+    Serial.begin(115200);
+    blinkySetup();
+    display.begin();
+    refreshDisplays();
 }
 
 void loop() {
-  static uint32_t lastFrameMs = 0;
-  uint32_t nowMs = millis();
-  if (nowMs - lastFrameMs < 1000 / FRAMERATE) return;
-  lastFrameMs = nowMs;
+    static uint32_t lastFrameMs = 0;
+    uint32_t nowMs = millis();
+    if (nowMs - lastFrameMs < 1000 / FRAMERATE) return;
+    lastFrameMs = nowMs;
 
-  display.clear();
-  
-
-
-
-
-
-  display.show();
+    blinkyUpdate();
+    pollAndApplySerial(game);
+    refreshDisplays();
 }
-

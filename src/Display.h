@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <FastLED.h>
 
+namespace core { class Game; }
+
 // ============================================================================
 //  CONFIG  —  set these to match your physical build.
 // ============================================================================
@@ -100,6 +102,9 @@ public:
     void begin();      // call once in setup()  -- TODO
     void clear();      // blank all regions
     void show();       // map every region into the strip, then output  -- TODO
+
+    // Draws game's current DisplayState onto the strip.
+    void draw(const core::Game& game);
 
     // Parameterized, array-like access: pick a player, then index the screen.
     //   display.player(P1)(x, y) = CRGB::Red;
