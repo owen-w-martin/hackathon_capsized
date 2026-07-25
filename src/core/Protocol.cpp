@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <sstream>
 
-namespace proto {
+namespace protocol {
 
 static std::string hex(const CRGB& c) {
     char buf[7];
@@ -13,15 +13,15 @@ static std::string hex(const CRGB& c) {
 
 std::string encodeState(const core::DisplayState& d) {
     std::string out = "S ";
-    for (int y = 0; y < core::BOARD_H; y++)
-        for (int x = 0; x < core::BOARD_W; x++)
+    for (int y = 0; y < cfg::SCREEN_H; y++)
+        for (int x = 0; x < cfg::SCREEN_W; x++)
             out += hex(d.p1[y][x]);
     out += " ";
-    for (int y = 0; y < core::BOARD_H; y++)
-        for (int x = 0; x < core::BOARD_W; x++)
+    for (int y = 0; y < cfg::SCREEN_H; y++)
+        for (int x = 0; x < cfg::SCREEN_W; x++)
             out += hex(d.p2[y][x]);
     out += " ";
-    for (int x = 0; x < core::BOARD_W; x++)
+    for (int x = 0; x < cfg::SCREEN_W; x++)
         out += hex(d.bar[x]);
 
     return out;

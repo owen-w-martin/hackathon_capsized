@@ -1,10 +1,24 @@
 #include "Display.h"
 
+#include "core/Game.h"
+
 // clear() is pure interface (delegates to the regions), so it's implemented.
 void Display::clear() {
     _p1.clear();
     _p2.clear();
     _bar.clear();
+}
+
+void Display::draw(const core::Game& game) {
+    const core::DisplayState& d = game.display();
+    for (int y = 0; y < cfg::SCREEN_H; y++) {
+        for (int x = 0; x < cfg::SCREEN_W; x++) {
+            player(P1)(x, y) = d.p1[y][x];
+            player(P2)(x, y) = d.p2[y][x];
+        }
+    }
+    for (int x = 0; x < cfg::SCREEN_W; x++) bar()(x) = d.bar[x];
+    show();
 }
 
 // ----------------------------------------------------------------------------

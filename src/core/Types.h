@@ -1,19 +1,17 @@
 #pragma once
 
-#include <FastLED.h>
+#include "../Display.h"
 
 namespace core {
 
 enum class Player : uint8_t { P1 = 0, P2 = 1 };
 
-constexpr int BOARD_W = 12;
-constexpr int BOARD_H = 12;
-
-// Raw display buffer: two 12x12 player grids + a 12-pixel bar.
+// Raw display buffer: two grids (sized to match the physical screens,
+// cfg::SCREEN_W/H) + a bar.
 struct DisplayState {
-    CRGB p1[BOARD_H][BOARD_W] = {};
-    CRGB p2[BOARD_H][BOARD_W] = {};
-    CRGB bar[BOARD_W] = {};
+    CRGB p1[cfg::SCREEN_H][cfg::SCREEN_W] = {};
+    CRGB p2[cfg::SCREEN_H][cfg::SCREEN_W] = {};
+    CRGB bar[cfg::SCREEN_W] = {};
 };
 
 }
