@@ -12,6 +12,10 @@ namespace cfg {
     constexpr int SCREEN_W = 12;       // TODO: per-player screen width  (pixels)
     constexpr int SCREEN_H = 12;       // TODO: per-player screen height (pixels)
 
+    constexpr int PLAYING_AREA_W = 10;
+    constexpr int PLAYING_AREA_H = 10;
+
+
     // Region offsets within the ONE physical strip.
     // Assumes the data line runs  P1 -> P2 -> bar; reorder if yours differs.
     //constexpr int P1_OFFSET  = 0;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Game.h"
+#include "../Game.h"
 
 // Reads and applies at most one full line from Serial to game. Returns true
 // only when a valid event was parsed and applied this call.
