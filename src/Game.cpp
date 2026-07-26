@@ -4,10 +4,10 @@ namespace core {
 
 namespace {
 
-int wrapToAxis(int32_t v, int size) {
-    int m = static_cast<int>(v % size);
-    if (m < 0) m += size;
-    return m;
+int32_t clampToAxis(int32_t v, int size) {
+    if (v < 0) return 0;
+    if (v > size - 1) return size - 1;
+    return v;
 }
 
 // Ambient color shown on the top bar for the current game state.
@@ -26,8 +26,20 @@ CRGB colorForState(GameState state) {
     return (p == Player::P1) ? ::P1 : ::P2;
 }
 
-Player otherPlayer(Player p) {
-    return (p == Player::P1) ? Player::P2 : Player::P1;
+// Decorative 1-pixel border ring around the 10x10 play area -- always on,
+// in every state, just a slow, dim breathing black rather than flat off.
+void drawAnimatedBorder(PlayerScreen& screen) {
+    uint8_t level = beatsin8(6, 0, 6);
+    CRGB borderColor = CRGB(level, level, level);
+
+    for (int x = 0; x < cfg::SCREEN_W; x++) {
+        screen(x, 0) = borderColor;
+        screen(x, cfg::SCREEN_H - 1) = borderColor;
+    }
+    for (int y = 0; y < cfg::SCREEN_H; y++) {
+        screen(0, y) = borderColor;
+        screen(cfg::SCREEN_W - 1, y) = borderColor;
+    }
 }
 
 }  // namespace
@@ -35,7 +47,9 @@ Player otherPlayer(Player p) {
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
     PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
     int32_t step = (delta > 0) ? 1 : -1;   // any rotation this way moves exactly one block
-    (axis == Axis::X ? in.x : in.y) += step;
+    int32_t& coord = (axis == Axis::X) ? in.x : in.y;
+    int size = (axis == Axis::X) ? cfg::PLAYING_AREA_W : cfg::PLAYING_AREA_H;
+    coord = clampToAxis(coord + step, size);
 }
 
 void Game::onButtonInput(Player p, bool pressed) {
@@ -43,11 +57,7 @@ void Game::onButtonInput(Player p, bool pressed) {
     bool wasPressed = in.button;
     in.button = pressed;
     if (pressed) in.everPressed = true;
-
-    // A fresh press from the player on offense ends their turn.
-    if (m_state == GameState::SELECTING && pressed && !wasPressed && p == m_currentPlayer) {
-        m_currentPlayer = otherPlayer(m_currentPlayer);
-    }
+    if (pressed && !wasPressed) in.justPressed = true;
 }
 
 bool Game::hasPressedButton(Player p) const {
@@ -55,67 +65,57 @@ bool Game::hasPressedButton(Player p) const {
     return in.everPressed;
 }
 
-void Game::transitionState() {
-    switch (m_state) {
-        case GameState::IDLE:
-            if (hasPressedButton(Player::P1) && hasPressedButton(Player::P2)) {
-                resetButtonPresses();
-                m_currentPlayer = Player::P1;
-                m_state = GameState::SELECTING;
-            }
-            break;
-        case GameState::SHIPSELECT:
-            // not used
-            break;
-        case GameState::SELECTING:
-
-            // selecting
-
-            // shooting
-
-            // check if victory
-            break;
-        case GameState::SHOOTING:
-            break;
-        case GameState::ENDSCREEN:
-            break;
-    }
+bool Game::consumePress(Player p) {
+    PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
+    bool result = in.justPressed;
+    in.justPressed = false;
+    return result;
 }
 
 void Game::processDisplayUpdates() {
     m_display.clear();
+
+    // Base layer, every state: the decorative border ring around the 10x10
+    // board. Anything drawn below can paint over it (e.g. the crosshair's
+    // arms reach all the way through it to the true screen edge).
+    drawAnimatedBorder(m_display.player(P1));
+    drawAnimatedBorder(m_display.player(P2));
 
     if (m_state == GameState::SELECTING) {
         // Offense (whoever's turn it is) aims with a crosshair over a slight
         // blue tint marking the 10x10 playing area; defense's playing area
         // is hidden behind a solid blue screen, same footprint.
         Player defense = otherPlayer(m_currentPlayer);
-        PlayerInput& offenseIn = (m_currentPlayer == Player::P1) ? m_p1 : m_p2;
-        int cx = wrapToAxis(offenseIn.x, cfg::SCREEN_W);
-        int cy = wrapToAxis(offenseIn.y, cfg::SCREEN_H);
+        const PlayerInput& offenseIn = (m_currentPlayer == Player::P1) ? m_p1 : m_p2;
 
-        const int areaX0 = (cfg::SCREEN_W - cfg::PLAYING_AREA_W) / 2;
-        const int areaY0 = (cfg::SCREEN_H - cfg::PLAYING_AREA_H) / 2;
+        // Target cell within the 10x10 grid -- already clamped to range by
+        // onEncoderInput, so this is a direct board coordinate.
+        int cx = static_cast<int>(offenseIn.x);
+        int cy = static_cast<int>(offenseIn.y);
+
         const CRGB kSlightBlueTint = CRGB(0, 0, 40);
 
         PlayerScreen& offenseScreen = m_display.player(toDisplayPlayer(m_currentPlayer));
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
-                offenseScreen(areaX0 + x, areaY0 + y) = kSlightBlueTint;
-        for (int x = 0; x < cfg::PLAYING_AREA_W; x++) offenseScreen(x, cy) = CRGB::Red;
-        for (int y = 0; y < cfg::PLAYING_AREA_H; y++) offenseScreen(cx, y) = CRGB::Red;
+                offenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = kSlightBlueTint;
+
+        // The crosshair is centered on the targeted cell, but its arms run
+        // the full width/height of the screen so they reach the border.
+        for (int x = 0; x < cfg::SCREEN_W; x++) offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy) = CRGB::Red;
+        for (int y = 0; y < cfg::SCREEN_H; y++) offenseScreen(cfg::PLAYING_AREA_X0 + cx, y) = CRGB::Red;
 
         PlayerScreen& defenseScreen = m_display.player(toDisplayPlayer(defense));
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
-                defenseScreen(areaX0 + x, areaY0 + y) = CRGB::Blue;
+                defenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = CRGB::Blue;
     } else {
-        int p1x = wrapToAxis(m_p1.x, cfg::SCREEN_W);
-        int p1y = wrapToAxis(m_p1.y, cfg::SCREEN_H);
+        int p1x = cfg::PLAYING_AREA_X0 + static_cast<int>(m_p1.x);
+        int p1y = cfg::PLAYING_AREA_Y0 + static_cast<int>(m_p1.y);
         m_display.player(P1)(p1x, p1y) = CRGB(0, 255, 255);    // P1: cyan
 
-        int p2x = wrapToAxis(m_p2.x, cfg::SCREEN_W);
-        int p2y = wrapToAxis(m_p2.y, cfg::SCREEN_H);
+        int p2x = cfg::PLAYING_AREA_X0 + static_cast<int>(m_p2.x);
+        int p2y = cfg::PLAYING_AREA_Y0 + static_cast<int>(m_p2.y);
         m_display.player(P2)(p2x, p2y) = CRGB(255, 140, 0);   // P2: orange
     }
 

@@ -12,9 +12,12 @@ namespace cfg {
     constexpr int SCREEN_W = 12;       // TODO: per-player screen width  (pixels)
     constexpr int SCREEN_H = 12;       // TODO: per-player screen height (pixels)
 
-    constexpr int PLAYING_AREA_W = 10;
-    constexpr int PLAYING_AREA_H = 10;
-
+    // The 10x10 board sits centered inside the 12x12 screen, leaving a
+    // 1-pixel decorative border ring all the way around.
+    constexpr int PLAYING_AREA_W  = 10;
+    constexpr int PLAYING_AREA_H  = 10;
+    constexpr int PLAYING_AREA_X0 = (SCREEN_W - PLAYING_AREA_W) / 2;
+    constexpr int PLAYING_AREA_Y0 = (SCREEN_H - PLAYING_AREA_H) / 2;
 
     // Region offsets within the ONE physical strip.
     // Assumes the data line runs  P1 -> P2 -> bar; reorder if yours differs.

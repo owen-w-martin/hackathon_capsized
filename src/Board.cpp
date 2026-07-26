@@ -69,14 +69,24 @@ void Board::scanBoard(Player player) {
     hardware.excite(player, true);
     hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
 
+    auto& caps = (player == P1) ? P1_caps : P2_caps;
     for (int x = 0; x < cfg::BOARD_W; x++) {
         for (int y = 0; y < cfg::BOARD_H; y++) {
             hardware.selectCell(y, x);
             float currentMa = hardware.readCurrentMa();
 
             if (currentMa < cfg::POPPED_THRESHOLD_MA) {
-                P1_caps[y * cfg::BOARD_W + x].setPopped();
+                caps[y * cfg::BOARD_W + x].setPopped();
             }
         }
     }
+}
+
+std::vector<std::pair<int, int>> Board::getCapPositions(Player p) const {
+    const auto& caps = (p == P1) ? P1_caps : P2_caps;
+    std::vector<std::pair<int, int>> positions;
+    for (const Capacitor& cap : caps) {
+        if (!cap.isPopped()) positions.push_back(cap.getPosition());
+    }
+    return positions;
 }

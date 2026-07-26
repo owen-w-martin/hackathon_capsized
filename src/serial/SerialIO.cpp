@@ -9,7 +9,7 @@ namespace {
 
 std::string buf;
 
-void apply(core::Game& game, const protocol::InputEvent& ev) {
+void apply(core::Game& game, Ship& p1Ship, Ship& p2Ship, const protocol::InputEvent& ev) {
     switch (ev.type) {
         case protocol::InputEvent::Type::Button1:
             game.onButtonInput(core::Player::P1, ev.buttonPressed);
@@ -29,6 +29,12 @@ void apply(core::Game& game, const protocol::InputEvent& ev) {
         case protocol::InputEvent::Type::Enc2Y:
             game.onEncoderInput(core::Player::P2, core::Game::Axis::Y, ev.encoderDelta);
             break;
+        case protocol::InputEvent::Type::ShipCell1:
+            p1Ship.addCell({ev.x, ev.y});
+            break;
+        case protocol::InputEvent::Type::ShipCell2:
+            p2Ship.addCell({ev.x, ev.y});
+            break;
         default:
             break;
     }
@@ -36,7 +42,7 @@ void apply(core::Game& game, const protocol::InputEvent& ev) {
 
 }  // namespace
 
-bool pollAndApplySerial(core::Game& game) {
+bool pollAndApplySerial(core::Game& game, Ship& p1Ship, Ship& p2Ship) {
     while (Serial.available()) {
         char c = static_cast<char>(Serial.read());
         if (c == '\n') {
@@ -47,7 +53,7 @@ bool pollAndApplySerial(core::Game& game) {
             protocol::InputEvent ev;
             std::string err;
             if (protocol::parseLine(line, ev, err)) {
-                apply(game, ev);
+                apply(game, p1Ship, p2Ship, ev);
                 return true;
             }
             Serial.print("ERR ");

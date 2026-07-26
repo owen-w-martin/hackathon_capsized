@@ -36,7 +36,7 @@ void Display::show() {
 
         // P1 region
         if (row < cfg::SCREEN_H) {
-            _leds[i] = _p1(cfg::SCREEN_W - 1 - col, cfg::SCREEN_H - 1 - row);
+            _leds[i] = _p1(cfg::SCREEN_W - 1 - col, row);
         }
 
         // bar region
@@ -46,7 +46,7 @@ void Display::show() {
 
         // P2 region
         else {
-            _leds[i] = _p2(col, row - (cfg::SCREEN_H + 1));
+            _leds[i] = _p2(col,  2*cfg::SCREEN_H - row);
         }
 
     }

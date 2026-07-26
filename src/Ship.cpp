@@ -18,12 +18,19 @@ bool Ship::checkHit(std::pair<int, int> shot) {
     return false; // Miss
 }
 
+void Ship::addCell(std::pair<int, int> pos) {
+    coords.push_back(pos);
+    health.push_back(true);
+}
+
 void Ship::draw(PlayerScreen& screen) {
     for (size_t i = 0; i < coords.size(); i++) {
+        int x = cfg::PLAYING_AREA_X0 + coords[i].first;
+        int y = cfg::PLAYING_AREA_Y0 + coords[i].second;
         if (health[i]) {
-            screen(coords[i].first, coords[i].second) = CRGB::White; // Healthy part
+            screen(x, y) = CRGB::White; // Healthy part
         } else {
-            screen(coords[i].first, coords[i].second) = CRGB::Red; // Damaged part
+            screen(x, y) = CRGB::Red; // Damaged part
         }
     }
 }

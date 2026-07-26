@@ -51,6 +51,15 @@ bool parseLine(const std::string& line, InputEvent& out, std::string& err) {
         return true;
     }
 
+    if (cmd == "SHIP1" || cmd == "SHIP2") {
+        int32_t x, y;
+        if (!(ss >> x >> y)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SHIP1") ? InputEvent::Type::ShipCell1 : InputEvent::Type::ShipCell2;
+        out.x = x;
+        out.y = y;
+        return true;
+    }
+
     err = "UNKNOWN_CMD";
     return false;
 }

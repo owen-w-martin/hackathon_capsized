@@ -22,6 +22,13 @@ enum class GameState {
 
 class Game {
 public:
+    struct PlayerInput {
+        int32_t x = 0, y = 0;   // driven by that player's two encoders
+        bool button = false;
+        bool everPressed = false;
+        bool justPressed = false;
+    };
+
     explicit Game(Display& display) : m_display(display) {}
 
     enum class Axis { X, Y };
@@ -33,25 +40,23 @@ public:
     bool hasPressedButton(Player p) const;
     void resetButtonPresses() { m_p1.everPressed = m_p2.everPressed = false; }
 
+    // True if the given player's button was freshly pressed since the last
+    // call for that player; clears the flag on read.
+    bool consumePress(Player p);
+
     GameState getState() const { return m_state; }
+    void setState(GameState state) { m_state = state; }
 
     // Whose turn it is during SELECTING.
     Player getCurrentPlayer() const { return m_currentPlayer; }
+    void setCurrentPlayer(Player p) { m_currentPlayer = p; }
 
-    // Advances the game state machine by one tick (checks for the
-    // conditions that move it from one state to the next).
-    void transitionState();
+    const PlayerInput& getPlayerInput(Player p) const { return (p == Player::P1) ? m_p1 : m_p2; }
 
     // (Re)draws the current cursor/button state onto the display.
     void processDisplayUpdates();
 
 private:
-    struct PlayerInput {
-        int32_t x = 0, y = 0;   // driven by that player's two encoders
-        bool button = false;
-        bool everPressed = false;
-    };
-
     Display& m_display;
     PlayerInput m_p1, m_p2;
     GameState m_state = GameState::IDLE;
