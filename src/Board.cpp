@@ -55,7 +55,7 @@ void Board::update() {
     hardware.excite(targetPlayer, true);
 
     float currentMa = hardware.readCurrentMa();
-    bool poppedDetected = currentMa < cfg::POPPED_THRESHOLD_MA;
+    bool poppedDetected = false; //currentMa < cfg::POPPED_THRESHOLD_MA;
     bool timedOut = millis() - chargeStartMs >= cfg::POP_TIMEOUT_MS;
 
     if (poppedDetected || timedOut) {
