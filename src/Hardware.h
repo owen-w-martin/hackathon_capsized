@@ -6,12 +6,12 @@
 #include "Display.h"
 
 namespace cfg {
-    constexpr uint8_t ROW_PINS[4]       = {41, 42, 43, 44};
-    constexpr uint8_t COL_PINS[4]       = {32, 33, 36, 27};
-    constexpr uint8_t P1_EXCITE_PIN     = 26;
-    constexpr uint8_t P2_EXCITE_PIN     = 25;
+    constexpr uint8_t ROW_PINS[4]       = {22, 21, 20, 19};
+    constexpr uint8_t COL_PINS[4]       = {15, 14, 41, 40};
+    constexpr uint8_t P1_EXCITE_PIN     = 33;
+    constexpr uint8_t P2_EXCITE_PIN     = 34;
     constexpr uint8_t CURRENT_LEVEL_PIN = 32;
-    constexpr uint8_t CURRENT_SENSE_PIN = 19;
+    constexpr uint8_t CURRENT_SENSE_PIN = 27;
 
     // TODO: calibrate these against the real current-sense circuit.
     constexpr float ADC_REF_VOLTAGE           = 3.3f;

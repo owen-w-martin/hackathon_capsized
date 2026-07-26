@@ -26,7 +26,7 @@ constexpr uint8_t P1_ENC_L_A = 12;
 constexpr uint8_t P2_FIRE = 26;
 constexpr uint8_t P1_FIRE = 24;
 
-constexpr uint32_t DEBOUNCE_US = 13000;   // 5ms
+constexpr uint32_t DEBOUNCE_US = 20000;   // 20ms
 
 // PEC11R-style detent encoders click once per full electrical (quadrature)
 // cycle, and the Encoder library counts all 4 edges of that cycle -- so 4
@@ -97,9 +97,9 @@ void hardwareIOBegin() {
 
 bool pollAndApplyHardware(core::Game& game) {
     int32_t p1x = -1 * consumeDetents(g_p1EncX, g_p1EncXBase);
-    int32_t p1y = -1 * consumeDetents(g_p1EncY, g_p1EncYBase);
+    int32_t p1y = consumeDetents(g_p1EncY, g_p1EncYBase);
     int32_t p2x = -1 * consumeDetents(g_p2EncX, g_p2EncXBase);
-    int32_t p2y = -1 * consumeDetents(g_p2EncY, g_p2EncYBase);
+    int32_t p2y = consumeDetents(g_p2EncY, g_p2EncYBase);
 
     bool p1BtnChanged, p1BtnPressed, p2BtnChanged, p2BtnPressed;
     noInterrupts();

@@ -5,6 +5,8 @@
 #include "Display.h"
 #include "Types.h"
 
+class Ship;
+
 // Bare I/O bring-up game: each player has two encoders (left/right,
 // up/down) driving a lit cursor pixel, and a button that lights their half
 // of the bar red while held. Writes straight into the Display it's given --
@@ -38,7 +40,13 @@ public:
 
     // True once the given player's button has been pressed at least once.
     bool hasPressedButton(Player p) const;
-    void resetButtonPresses() { m_p1.everPressed = m_p2.everPressed = false; }
+    void resetButtonPresses() {
+        m_p1.everPressed = m_p2.everPressed = false;
+        // Also clear justPressed -- otherwise the button hold used to
+        // start the game reads back as a fresh, un-aimed shot the moment
+        // SELECTING begins.
+        m_p1.justPressed = m_p2.justPressed = false;
+    }
 
     // True if the given player's button was freshly pressed since the last
     // call for that player; clears the flag on read.
@@ -53,8 +61,10 @@ public:
 
     const PlayerInput& getPlayerInput(Player p) const { return (p == Player::P1) ? m_p1 : m_p2; }
 
-    // (Re)draws the current cursor/button state onto the display.
-    void processDisplayUpdates();
+    // (Re)draws the current cursor/button/ship state onto the display. Ships
+    // are the base layer, so state-driven overlays (concealment, crosshair,
+    // border) composite on top of them correctly.
+    void processDisplayUpdates(Ship& p1Ship, Ship& p2Ship);
 
 private:
     Display& m_display;

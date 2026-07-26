@@ -13,7 +13,7 @@ namespace cfg {
     // TODO: calibrate against real hardware -- an intact capacitor should
     // read close to the ~200mA detection current; a popped one should read
     // close to 0.
-    constexpr float POPPED_THRESHOLD_MA = 50.0f;
+    constexpr float POPPED_THRESHOLD_MA = 5.0f;
 
     // TODO: tune to how long it actually takes to pop a capacitor at the Pop
     // current level; this is a safety cutoff for when the current never

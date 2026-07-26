@@ -1,5 +1,7 @@
 #include "Board.h"
 
+#include <Arduino.h>
+
 Capacitor::Capacitor(std::pair<int, int> pos)
     : position(pos), popped(false) {}
 
@@ -66,20 +68,41 @@ void Board::update() {
 }
 
 void Board::scanBoard(Player player) {
+    Serial.print("scanBoard: scanning ");
+    Serial.println(player == P1 ? "P1" : "P2");
+
     hardware.excite(player, true);
     hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
 
     auto& caps = (player == P1) ? P1_caps : P2_caps;
+    int poppedCount = 0;
     for (int x = 0; x < cfg::BOARD_W; x++) {
         for (int y = 0; y < cfg::BOARD_H; y++) {
             hardware.selectCell(y, x);
             float currentMa = hardware.readCurrentMa();
+            bool popped = currentMa < cfg::POPPED_THRESHOLD_MA;
 
-            if (currentMa < cfg::POPPED_THRESHOLD_MA) {
+            Serial.print("  (");
+            Serial.print(x);
+            Serial.print(",");
+            Serial.print(y);
+            Serial.print(") ");
+            Serial.print(currentMa);
+            Serial.print("mA -> ");
+            Serial.println(popped ? "POPPED" : "intact");
+
+            if (popped) {
                 caps[y * cfg::BOARD_W + x].setPopped();
+                poppedCount++;
             }
         }
     }
+
+    Serial.print("scanBoard: done, ");
+    Serial.print(poppedCount);
+    Serial.print("/");
+    Serial.print(cfg::BOARD_W * cfg::BOARD_H);
+    Serial.println(" popped");
 }
 
 std::vector<std::pair<int, int>> Board::getCapPositions(Player p) const {

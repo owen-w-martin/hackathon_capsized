@@ -27,7 +27,7 @@ void setup() {
     blinkySetup();
     display.begin();
     hardwareIOBegin();
-    game.processDisplayUpdates();
+    game.processDisplayUpdates(p1Ship, p2Ship);
     printToSerial(display);
 }
 
@@ -46,8 +46,6 @@ void loop() {
     // get inputs from the physical button + encoder
     pollAndApplyHardware(game);
 
-    display.player(P1)(1, 1) = CRGB::Red;
-
     switch (game.getState()) {
         case core::GameState::IDLE:
 
@@ -57,21 +55,21 @@ void loop() {
             game.resetButtonPresses();
             game.setCurrentPlayer(core::Player::P1);
 
-            // board.scanBoard(P1);
-            // board.scanBoard(P2);
+            board.scanBoard(P1);
+            board.scanBoard(P2);
 
-            // p1Ship = Ship(board.getCapPositions(P1));
-            // p2Ship = Ship(board.getCapPositions(P2));
+            p1Ship = Ship(board.getCapPositions(P1));
+            p2Ship = Ship(board.getCapPositions(P2));
 
-            p1Ship.addCell({0, 0});
-            p1Ship.addCell({1, 0});
-            p1Ship.addCell({2, 0});
+            // p1Ship.addCell({0, 0});
+            // p1Ship.addCell({1, 0});
+            // p1Ship.addCell({2, 0});
 
-            p2Ship.addCell({0, 0});
-            p2Ship.addCell({0, 1});
-            p2Ship.addCell({0, 2});
+            // p2Ship.addCell({0, 0});
+            // p2Ship.addCell({0, 1});
+            // p2Ship.addCell({0, 2});
 
-            p2Ship.addCell({1, 3});
+            // p2Ship.addCell({1, 3});
 
 
             game.setState(core::GameState::SELECTING);
@@ -81,14 +79,17 @@ void loop() {
             break;
         case core::GameState::SELECTING:
             if (game.consumePress(game.getCurrentPlayer())) {
-                game.setCurrentPlayer(core::otherPlayer(game.getCurrentPlayer()));
-                int32_t x = game.getPlayerInput(game.getCurrentPlayer()).x;
-                int32_t y = game.getPlayerInput(game.getCurrentPlayer()).y;
-                board.popCap(toDisplayPlayer(core::otherPlayer(game.getCurrentPlayer())), x, y);
-            }
+                core::Player offense = game.getCurrentPlayer();
+                core::Player defense = core::otherPlayer(offense);
+                int32_t x = game.getPlayerInput(offense).x;
+                int32_t y = game.getPlayerInput(offense).y;
 
-            
-            // shooting
+                Ship& defenseShip = (defense == core::Player::P1) ? p1Ship : p2Ship;
+                defenseShip.checkHit({x, y});
+
+                // board.popCap(toDisplayPlayer(defense), x, y);
+                game.setCurrentPlayer(defense);
+            }
 
             // check if victory
 
@@ -101,17 +102,12 @@ void loop() {
 
     // -- update what should be on the display --
     display.clear();
-    game.processDisplayUpdates();
-    display.player(P1)(1, 1) = CRGB::Red;
-    display.player(P2)(1, 1) = CRGB::Red;
-
-    p1Ship.draw(display.player(P1));
-    p2Ship.draw(display.player(P2));
+    game.processDisplayUpdates(p1Ship, p2Ship);
 
     // -- actually write to the display --
     display.show();
 
     // debug: push to serial as well so we can view on laptop
-    printToSerial(display);
+    // printToSerial(display);
 }
 

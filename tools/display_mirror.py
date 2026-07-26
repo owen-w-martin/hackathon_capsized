@@ -93,7 +93,10 @@ def draw_grid(surface, origin, pixels):
     for y in range(BOARD_H):
         for x in range(BOARD_W):
             color = pixels[y * BOARD_W + x]
-            rect = (ox + x * CELL, oy + y * CELL, CELL - 1, CELL - 1)
+            # y=0 is the bottom of the screen (see Display::show()), so flip
+            # the row when drawing to match the physical board.
+            row = BOARD_H - 1 - y
+            rect = (ox + x * CELL, oy + row * CELL, CELL - 1, CELL - 1)
             pygame.draw.rect(surface, color, rect)
 
 

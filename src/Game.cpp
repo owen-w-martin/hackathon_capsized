@@ -1,5 +1,7 @@
 #include "Game.h"
 
+#include "Ship.h"
+
 namespace core {
 
 namespace {
@@ -47,6 +49,9 @@ void drawAnimatedBorder(PlayerScreen& screen) {
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
     PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
     int32_t step = (delta > 0) ? 1 : -1;   // any rotation this way moves exactly one block
+    // y=0 is the bottom of the screen (see Display::show()), so moving "up"
+    // must increase y -- the opposite of the raw encoder step.
+    if (axis == Axis::Y) step = -step;
     int32_t& coord = (axis == Axis::X) ? in.x : in.y;
     int size = (axis == Axis::X) ? cfg::PLAYING_AREA_W : cfg::PLAYING_AREA_H;
     coord = clampToAxis(coord + step, size);
@@ -72,7 +77,7 @@ bool Game::consumePress(Player p) {
     return result;
 }
 
-void Game::processDisplayUpdates() {
+void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
     m_display.clear();
 
     // Base layer, every state: the decorative border ring around the 10x10
@@ -82,10 +87,12 @@ void Game::processDisplayUpdates() {
     drawAnimatedBorder(m_display.player(P2));
 
     if (m_state == GameState::SELECTING) {
-        // Offense (whoever's turn it is) aims with a crosshair over a slight
-        // blue tint marking the 10x10 playing area; defense's playing area
-        // is hidden behind a solid blue screen, same footprint.
+        // Only the defender's ships are relevant this turn: shown to the
+        // offense (revealed, so they can aim) and to the defense (their own
+        // board). Same Ship, drawn on both screens, on top of the fills
+        // below so it stays visible against them.
         Player defense = otherPlayer(m_currentPlayer);
+        Ship& defenseShip = (defense == Player::P1) ? p1Ship : p2Ship;
         const PlayerInput& offenseIn = (m_currentPlayer == Player::P1) ? m_p1 : m_p2;
 
         // Target cell within the 10x10 grid -- already clamped to range by
@@ -95,20 +102,25 @@ void Game::processDisplayUpdates() {
 
         const CRGB kSlightBlueTint = CRGB(0, 0, 40);
 
+        // Offense aims with a crosshair over a slight blue tint marking the
+        // 10x10 playing area.
         PlayerScreen& offenseScreen = m_display.player(toDisplayPlayer(m_currentPlayer));
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
                 offenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = kSlightBlueTint;
+        defenseShip.draw(offenseScreen);
 
         // The crosshair is centered on the targeted cell, but its arms run
         // the full width/height of the screen so they reach the border.
         for (int x = 0; x < cfg::SCREEN_W; x++) offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy) = CRGB::Red;
         for (int y = 0; y < cfg::SCREEN_H; y++) offenseScreen(cfg::PLAYING_AREA_X0 + cx, y) = CRGB::Red;
 
+        // Defense's playing area gets a solid blue backdrop, same footprint.
         PlayerScreen& defenseScreen = m_display.player(toDisplayPlayer(defense));
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
                 defenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = CRGB::Blue;
+        defenseShip.draw(defenseScreen);
     } else {
         int p1x = cfg::PLAYING_AREA_X0 + static_cast<int>(m_p1.x);
         int p1y = cfg::PLAYING_AREA_Y0 + static_cast<int>(m_p1.y);
