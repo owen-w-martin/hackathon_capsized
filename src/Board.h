@@ -14,6 +14,11 @@ namespace cfg {
     // read close to the ~200mA detection current; a popped one should read
     // close to 0.
     constexpr float POPPED_THRESHOLD_MA = 50.0f;
+
+    // TODO: tune to how long it actually takes to pop a capacitor at the Pop
+    // current level; this is a safety cutoff for when the current never
+    // drops (e.g. a wiring fault or a capacitor that won't pop).
+    constexpr uint32_t POP_TIMEOUT_MS = 2000;
 }
 
 enum class BoardStatus {
@@ -21,24 +26,18 @@ enum class BoardStatus {
     CHARGING,
 };
 
-enum class CapStatus {
-    INTACT,
-    POPPED,
-    FAULTY
-};
-
 class Capacitor {
 public:
     Capacitor(std::pair<int, int> pos);
 
     std::pair<int, int> getPosition() const;
-    CapStatus           getStatus() const;
+    bool                isPopped() const;
     void                setPopped();
     void                setFaulty();
 
 private:
     std::pair<int, int> position;
-    CapStatus           status;
+    bool                popped;
 };
 
 class Board {
@@ -47,13 +46,13 @@ public:
 
     void update();
 
-    void scanBoard();
+    void scanBoard(Player player);
 
     std::vector<std::pair<int, int>> getCapPositions(Player p) const;
 
-    void popCap(std::pair<int, int> pos);
+    void popCap(Player player, int x, int y);
 
-    CapStatus getCapStatus(std::pair<int, int> pos);
+    bool isCapPopped(std::pair<int, int> pos);
 
     BoardStatus getStatus() const { return status; }
 
@@ -62,5 +61,7 @@ private:
     std::vector<Capacitor> P1_caps;
     std::vector<Capacitor> P2_caps;
     BoardStatus status;
-    std::pair<int, int> target(std::pair<int, int> pos) const;
+    std::pair<int, int> targetCoord;
+    Player targetPlayer;
+    uint32_t chargeStartMs;
 };

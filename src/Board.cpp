@@ -1,22 +1,22 @@
 #include "Board.h"
 
 Capacitor::Capacitor(std::pair<int, int> pos)
-    : position(pos), status(CapStatus::INTACT) {}
+    : position(pos), popped(false) {}
 
 std::pair<int, int> Capacitor::getPosition() const {
     return position;
 }
 
-CapStatus Capacitor::getStatus() const {
-    return status;
+bool Capacitor::isPopped() const {
+    return popped;
 }
 
 void Capacitor::setPopped() {
-    status = CapStatus::POPPED;
+    popped = true;
 }
 
 void Capacitor::setFaulty() {
-    status = CapStatus::FAULTY;
+    popped = true;
 }
 
 Board::Board() {
@@ -30,12 +30,43 @@ Board::Board() {
     status = BoardStatus::IDLE;
 }
 
-void Board::update() {
+void Board::popCap(Player player, int x, int y){
+    if (status == BoardStatus::CHARGING) return;
 
+    targetCoord = std::make_pair(x, y);
+    targetPlayer = player;
+    chargeStartMs = millis();
+    status = BoardStatus::CHARGING;
 }
 
-void Board::scanBoard() {
-    hardware.excite(P1, true);
+void Board::update() {
+    if (status != BoardStatus::CHARGING) {
+        hardware.excite(P1, false);
+        hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
+        return;
+    }
+
+    hardware.selectCell(targetCoord.second, targetCoord.first);
+    hardware.setCurrentLevel(Hardware::CurrentLevel::Pop);
+    hardware.excite(targetPlayer, true);
+
+    float currentMa = hardware.readCurrentMa();
+    bool poppedDetected = currentMa < cfg::POPPED_THRESHOLD_MA;
+    bool timedOut = millis() - chargeStartMs >= cfg::POP_TIMEOUT_MS;
+
+    if (poppedDetected || timedOut) {
+        hardware.excite(targetPlayer, false);
+        status = BoardStatus::IDLE;
+
+        if (poppedDetected) {
+            auto& caps = (targetPlayer == P1) ? P1_caps : P2_caps;
+            caps[targetCoord.second * cfg::BOARD_W + targetCoord.first].setPopped();
+        }
+    }
+}
+
+void Board::scanBoard(Player player) {
+    hardware.excite(player, true);
     hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
 
     for (int x = 0; x < cfg::BOARD_W; x++) {
