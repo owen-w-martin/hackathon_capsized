@@ -22,14 +22,16 @@ void Capacitor::setFaulty() {
 }
 
 Board::Board() {
-    for (int y = 0; y < cfg::BOARD_H; y++) {
-        for (int x = 0; x < cfg::BOARD_W; x++) {
-            P1_caps.emplace_back(std::make_pair(x, y));
-            P2_caps.emplace_back(std::make_pair(x, y));
-        }
-    }
-
     status = BoardStatus::IDLE;
+}
+
+namespace {
+    Capacitor* findCap(std::vector<Capacitor>& caps, std::pair<int, int> pos) {
+        for (Capacitor& cap : caps) {
+            if (cap.getPosition() == pos) return &cap;
+        }
+        return nullptr;
+    }
 }
 
 void Board::popCap(Player player, int x, int y){
@@ -62,7 +64,8 @@ void Board::update() {
 
         if (poppedDetected) {
             auto& caps = (targetPlayer == P1) ? P1_caps : P2_caps;
-            caps[targetCoord.second * cfg::BOARD_W + targetCoord.first].setPopped();
+            Capacitor* cap = findCap(caps, targetCoord);
+            if (cap) cap->setPopped();
         }
     }
 }
@@ -75,12 +78,12 @@ void Board::scanBoard(Player player) {
     hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
 
     auto& caps = (player == P1) ? P1_caps : P2_caps;
-    int poppedCount = 0;
+    caps.clear();
     for (int x = 0; x < cfg::BOARD_W; x++) {
         for (int y = 0; y < cfg::BOARD_H; y++) {
             hardware.selectCell(y, x);
             float currentMa = hardware.readCurrentMa();
-            bool popped = currentMa < cfg::POPPED_THRESHOLD_MA;
+            bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
 
             Serial.print("  (");
             Serial.print(x);
@@ -89,20 +92,19 @@ void Board::scanBoard(Player player) {
             Serial.print(") ");
             Serial.print(currentMa);
             Serial.print("mA -> ");
-            Serial.println(popped ? "POPPED" : "intact");
+            Serial.println(capPresent ? "present" : "none");
 
-            if (popped) {
-                caps[y * cfg::BOARD_W + x].setPopped();
-                poppedCount++;
+            if (capPresent) {
+                caps.emplace_back(std::make_pair(x, y));
             }
         }
     }
 
     Serial.print("scanBoard: done, ");
-    Serial.print(poppedCount);
+    Serial.print(caps.size());
     Serial.print("/");
     Serial.print(cfg::BOARD_W * cfg::BOARD_H);
-    Serial.println(" popped");
+    Serial.println(" caps found");
 }
 
 std::vector<std::pair<int, int>> Board::getCapPositions(Player p) const {
