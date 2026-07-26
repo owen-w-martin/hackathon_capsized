@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../Display.h"
+#include "Display.h"
 #include "Types.h"
 
 // Bare I/O bring-up game: each player has two encoders (left/right,

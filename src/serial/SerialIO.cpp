@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <string>
 
-#include "core/Protocol.h"
+#include "Protocol.h"
 
 namespace {
 

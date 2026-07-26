@@ -36,7 +36,6 @@ void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
     PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
     int32_t step = (delta > 0) ? 1 : -1;   // any rotation this way moves exactly one block
     (axis == Axis::X ? in.x : in.y) += step;
-    processDisplayUpdates();
 }
 
 void Game::onButtonInput(Player p, bool pressed) {
@@ -49,8 +48,6 @@ void Game::onButtonInput(Player p, bool pressed) {
     if (m_state == GameState::SELECTING && pressed && !wasPressed && p == m_currentPlayer) {
         m_currentPlayer = otherPlayer(m_currentPlayer);
     }
-
-    processDisplayUpdates();
 }
 
 bool Game::hasPressedButton(Player p) const {
@@ -97,8 +94,8 @@ void Game::processDisplayUpdates() {
         int cy = wrapToAxis(offenseIn.y, cfg::SCREEN_H);
 
         PlayerScreen& offenseScreen = m_display.player(toDisplayPlayer(m_currentPlayer));
-        for (int x = 0; x < cfg::SCREEN_W; x++) offenseScreen(x, cy) = CRGB::Red;
-        for (int y = 0; y < cfg::SCREEN_H; y++) offenseScreen(cx, y) = CRGB::Red;
+        for (int x = 0; x < cfg::PLAYING_AREA_W; x++) offenseScreen(x, cy) = CRGB::Red;
+        for (int y = 0; y < cfg::PLAYING_AREA_H; y++) offenseScreen(cx, y) = CRGB::Red;
 
         m_display.player(toDisplayPlayer(defense)).fill(CRGB::Blue);
     } else {

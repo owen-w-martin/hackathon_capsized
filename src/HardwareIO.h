@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Game.h"
+#include "Game.h"
 
 // Sets up interrupt-driven reads of one physical button and one rotary
 // encoder. Call once from setup().

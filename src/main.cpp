@@ -3,8 +3,8 @@
 #include "Blinky.h"
 #include "Display.h"
 #include "HardwareIO.h"
-#include "SerialIO.h"
-#include "core/Game.h"
+#include "Game.h"
+#include "serial/SerialIO.h"
 
 #define FRAMERATE 30
 
