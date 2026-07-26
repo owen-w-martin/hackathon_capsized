@@ -11,14 +11,6 @@
 Display display;
 core::Game game(display);
 
-enum class GameState {
-    IDLE,
-    SHIPSELECT,
-    PLAYING,
-    ENDSCREEN
-};
-GameState state;
-
 void setup() {
     Serial.begin(115200);
     blinkySetup();
@@ -26,8 +18,6 @@ void setup() {
     hardwareIOBegin();
     game.processDisplayUpdates();
     printToSerial(display);
-
-    state = GameState::IDLE;
 }
 
 void loop() {
@@ -36,33 +26,20 @@ void loop() {
     if (nowMs - lastFrameMs < 1000 / FRAMERATE) return;
     lastFrameMs = nowMs;
     blinkyUpdate();
-    
-    // -- get inputs -- 
+
+    // -- get inputs --
     // debug: get inputs from serial, aka laptop
     pollAndApplySerial(game);
     // get inputs from the physical button + encoder
     pollAndApplyHardware(game);
-    
+
+    game.transitionState();
+
     // -- update what should be on the display --
     display.clear();
     game.processDisplayUpdates();
 
-    switch (state) {
-        case GameState::IDLE:
-            
-            break;
-        case GameState::SHIPSELECT:
-            
-            break;
-        case GameState::PLAYING:
-            
-            break;
-        case GameState::ENDSCREEN:
-            
-            break;
-    }
-    
-    // -- actually write to the display --  
+    // -- actually write to the display --
     display.show();
 
     // debug: push to serial as well so we can view on laptop
