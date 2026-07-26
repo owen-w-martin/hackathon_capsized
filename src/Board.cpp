@@ -84,15 +84,17 @@ void Board::scanBoard(Player player) {
             hardware.selectCell(y, x);
             float currentMa = hardware.readCurrentMa();
             bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
-
-            Serial.print("  (");
-            Serial.print(x);
-            Serial.print(",");
-            Serial.print(y);
-            Serial.print(") ");
-            Serial.print(currentMa);
-            Serial.print("mA -> ");
-            Serial.println(capPresent ? "present" : "none");
+            
+            if (capPresent) {
+                Serial.print("  (");
+                Serial.print(x);
+                Serial.print(",");
+                Serial.print(y);
+                Serial.print(") ");
+                Serial.print(currentMa);
+                Serial.print("mA -> ");
+                Serial.println(capPresent ? "present" : "none");
+            }
 
             if (capPresent) {
                 caps.emplace_back(std::make_pair(x, y));

@@ -8,7 +8,7 @@
 #include "Ship.h"
 #include "Board.h"
 
-#define FRAMERATE 30
+#define FRAMERATE 5
 
 namespace {
 ::Player toDisplayPlayer(core::Player p) {
@@ -26,6 +26,11 @@ void setup() {
     Serial.begin(115200);
     blinkySetup();
     display.begin();
+    board.scanBoard(P1);
+    board.scanBoard(P2);
+
+    p1Ship = Ship(board.getCapPositions(P1));
+    p2Ship = Ship(board.getCapPositions(P2));
     hardwareIOBegin();
     game.processDisplayUpdates(p1Ship, p2Ship);
     printToSerial(display);
@@ -78,6 +83,11 @@ void loop() {
             // not used
             break;
         case core::GameState::SELECTING:
+            board.scanBoard(P1);
+            board.scanBoard(P2);
+
+            p1Ship = Ship(board.getCapPositions(P1));
+            p2Ship = Ship(board.getCapPositions(P2));
             if (game.consumePress(game.getCurrentPlayer())) {
                 core::Player offense = game.getCurrentPlayer();
                 core::Player defense = core::otherPlayer(offense);
@@ -86,6 +96,7 @@ void loop() {
 
                 Ship& defenseShip = (defense == core::Player::P1) ? p1Ship : p2Ship;
                 defenseShip.checkHit({x, y});
+
 
                 // board.popCap(toDisplayPlayer(defense), x, y);
                 game.setCurrentPlayer(defense);
