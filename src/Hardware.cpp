@@ -6,7 +6,7 @@ Hardware::Hardware() {
     pinMode(cfg::P1_EXCITE_PIN, OUTPUT);
     pinMode(cfg::P2_EXCITE_PIN, OUTPUT);
     pinMode(cfg::CURRENT_LEVEL_PIN, OUTPUT);
-    pinMode(cfg::CURRENT_SENSE_PIN, INPUT);
+    // pinMode(A13, INPUT);
 
     digitalWrite(cfg::P1_EXCITE_PIN, LOW);
     digitalWrite(cfg::P2_EXCITE_PIN, LOW);
@@ -30,7 +30,10 @@ void Hardware::setCurrentLevel(CurrentLevel level) const {
 }
 
 float Hardware::readCurrentMa() const {
-    int raw = analogRead(cfg::CURRENT_SENSE_PIN);
-    float volts = (raw / static_cast<float>(cfg::ADC_MAX_COUNT)) * cfg::ADC_REF_VOLTAGE;
-    return volts * cfg::CURRENT_SENSE_MA_PER_VOLT;
+    // int raw = analogRead(cfg::CURRENT_SENSE_PIN);
+    // float volts = (raw / static_cast<float>(cfg::ADC_MAX_COUNT)) * cfg::ADC_REF_VOLTAGE;
+    // return volts * cfg::CURRENT_SENSE_MA_PER_VOLT;
+
+    return static_cast<float>((analogRead(cfg::CURRENT_SENSE_PIN)) * 917.f / 1000.f);
+
 }

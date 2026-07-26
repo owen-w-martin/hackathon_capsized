@@ -26,8 +26,8 @@ void setup() {
     Serial.begin(115200);
     blinkySetup();
     display.begin();
-    board.scanBoard(P1);
-    board.scanBoard(P2);
+    // board.scanBoard(P1);
+    // board.scanBoard(P2);
 
     p1Ship = Ship(board.getCapPositions(P1));
     p2Ship = Ship(board.getCapPositions(P2));
@@ -54,17 +54,19 @@ void loop() {
     switch (game.getState()) {
         case core::GameState::IDLE:
 
+            board.scanSquare(P1, 0, 0);
+
             if (!(game.hasPressedButton(core::Player::P1) && game.hasPressedButton(core::Player::P2))) {
                 break;
             }
             game.resetButtonPresses();
             game.setCurrentPlayer(core::Player::P1);
 
-            board.scanBoard(P1);
-            board.scanBoard(P2);
+            // board.scanBoard(P1);
+            // board.scanBoard(P2);
 
-            p1Ship = Ship(board.getCapPositions(P1));
-            p2Ship = Ship(board.getCapPositions(P2));
+            // p1Ship = Ship(board.getCapPositions(P1));
+            // p2Ship = Ship(board.getCapPositions(P2));
 
             // p1Ship.addCell({0, 0});
             // p1Ship.addCell({1, 0});
@@ -82,12 +84,13 @@ void loop() {
         case core::GameState::SHIPSELECT:
             // not used
             break;
-        case core::GameState::SELECTING:
-            board.scanBoard(P1);
-            board.scanBoard(P2);
+        case core::GameState::SELECTING: {
+            core::Player current = game.getCurrentPlayer();
 
-            p1Ship = Ship(board.getCapPositions(P1));
-            p2Ship = Ship(board.getCapPositions(P2));
+            board.scanBoard(toDisplayPlayer(current));
+            Ship& currentShip = (current == core::Player::P1) ? p1Ship : p2Ship;
+            currentShip = Ship(board.getCapPositions(toDisplayPlayer(current)));
+
             if (game.consumePress(game.getCurrentPlayer())) {
                 core::Player offense = game.getCurrentPlayer();
                 core::Player defense = core::otherPlayer(offense);
@@ -105,6 +108,7 @@ void loop() {
             // check if victory
 
             break;
+        }
         case core::GameState::SHOOTING:
             break;
         case core::GameState::ENDSCREEN:

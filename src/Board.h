@@ -54,6 +54,7 @@ public:
 
     bool isCapPopped(std::pair<int, int> pos);
 
+    void scanSquare(Player player, int x, int y);
     BoardStatus getStatus() const { return status; }
 
 private:

@@ -70,11 +70,38 @@ void Board::update() {
     }
 }
 
+void Board::scanSquare(Player player, int x, int y) {
+    Serial.print("scanSquare: scanning ");
+    Serial.print(player == P1 ? "P1" : "P2");
+    Serial.print(" (");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(y);
+    Serial.println(")");
+
+    hardware.excite(player, true);
+    hardware.selectCell(y, x);
+    delay(100);
+    float currentMa = hardware.readCurrentMa();
+    bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
+
+    if (capPresent) {
+        auto& caps = (player == P1) ? P1_caps : P2_caps;
+        caps.emplace_back(std::make_pair(x, y));
+    }
+
+    Serial.print("scanSquare: done, ");
+    Serial.print(currentMa);
+    Serial.print("mA -> ");
+    Serial.println(capPresent ? "present" : "none");
+}
+
 void Board::scanBoard(Player player) {
     Serial.print("scanBoard: scanning ");
     Serial.println(player == P1 ? "P1" : "P2");
 
     hardware.excite(player, true);
+    
     hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
 
     auto& caps = (player == P1) ? P1_caps : P2_caps;
@@ -82,10 +109,24 @@ void Board::scanBoard(Player player) {
     for (int x = 0; x < cfg::BOARD_W; x++) {
         for (int y = 0; y < cfg::BOARD_H; y++) {
             hardware.selectCell(y, x);
+            delay(200);
             float currentMa = hardware.readCurrentMa();
             bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
             
-            if (capPresent) {
+            if (x == 0 && y == 0) {
+                Serial.println("-----A1------");
+                Serial.print("  (");
+                Serial.print(x);
+                Serial.print(",");
+                Serial.print(y);
+                Serial.print(") ");
+                Serial.print(currentMa);
+                Serial.print("mA -> ");
+                Serial.println(capPresent ? "present" : "none");
+                Serial.println("-----A1------");
+            }
+
+            if (currentMa > 0.0f) {
                 Serial.print("  (");
                 Serial.print(x);
                 Serial.print(",");
