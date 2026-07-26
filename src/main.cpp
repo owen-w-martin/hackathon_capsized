@@ -48,9 +48,18 @@ void loop() {
     game.processDisplayUpdates();
 
     switch (state) {
-        case GameState::IDLE:
-            
+        case GameState::IDLE: {
+            static bool p1EverPressed = false;
+            static bool p2EverPressed = false;
+            p1EverPressed |= game.buttonPressed(core::Player::P1);
+            p2EverPressed |= game.buttonPressed(core::Player::P2);
+            if (p1EverPressed && p2EverPressed) {
+                p1EverPressed = false;
+                p2EverPressed = false;
+                state = GameState::PLAYING;
+            }
             break;
+        }
         case GameState::SHIPSELECT:
             
             break;

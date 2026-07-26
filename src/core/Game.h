@@ -24,6 +24,9 @@ public:
     // (Re)draws the current cursor/button state onto the display.
     void processDisplayUpdates();
 
+    // Current (live, not edge-triggered) pressed state of a player's button.
+    bool buttonPressed(Player p) const { return (p == Player::P1) ? m_p1.button : m_p2.button; }
+
 private:
     struct PlayerInput {
         int32_t x = 0, y = 0;   // driven by that player's two encoders
