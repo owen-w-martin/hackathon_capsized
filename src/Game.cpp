@@ -86,18 +86,29 @@ void Game::processDisplayUpdates() {
     m_display.clear();
 
     if (m_state == GameState::SELECTING) {
-        // Offense (whoever's turn it is) aims with a crosshair; defense's
-        // board is hidden behind a solid blue screen.
+        // Offense (whoever's turn it is) aims with a crosshair over a slight
+        // blue tint marking the 10x10 playing area; defense's playing area
+        // is hidden behind a solid blue screen, same footprint.
         Player defense = otherPlayer(m_currentPlayer);
         PlayerInput& offenseIn = (m_currentPlayer == Player::P1) ? m_p1 : m_p2;
         int cx = wrapToAxis(offenseIn.x, cfg::SCREEN_W);
         int cy = wrapToAxis(offenseIn.y, cfg::SCREEN_H);
 
+        const int areaX0 = (cfg::SCREEN_W - cfg::PLAYING_AREA_W) / 2;
+        const int areaY0 = (cfg::SCREEN_H - cfg::PLAYING_AREA_H) / 2;
+        const CRGB kSlightBlueTint = CRGB(0, 0, 40);
+
         PlayerScreen& offenseScreen = m_display.player(toDisplayPlayer(m_currentPlayer));
+        for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
+            for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
+                offenseScreen(areaX0 + x, areaY0 + y) = kSlightBlueTint;
         for (int x = 0; x < cfg::PLAYING_AREA_W; x++) offenseScreen(x, cy) = CRGB::Red;
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++) offenseScreen(cx, y) = CRGB::Red;
 
-        m_display.player(toDisplayPlayer(defense)).fill(CRGB::Blue);
+        PlayerScreen& defenseScreen = m_display.player(toDisplayPlayer(defense));
+        for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
+            for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
+                defenseScreen(areaX0 + x, areaY0 + y) = CRGB::Blue;
     } else {
         int p1x = wrapToAxis(m_p1.x, cfg::SCREEN_W);
         int p1y = wrapToAxis(m_p1.y, cfg::SCREEN_H);
