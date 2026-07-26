@@ -44,9 +44,8 @@ void loop() {
     pollAndApplyHardware(game);
     
     // -- update what should be on the display --
-    game.processDisplayUpdates();
-
     display.clear();
+    game.processDisplayUpdates();
 
     switch (state) {
         case GameState::IDLE:
