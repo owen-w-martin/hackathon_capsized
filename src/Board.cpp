@@ -46,20 +46,43 @@ void Board::popCap(Player player, int x, int y){
 void Board::update() {
     if (status != BoardStatus::CHARGING) {
         hardware.excite(P1, false);
-        hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
+        // hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
         return;
     }
 
+    // hardware.setCurrentLevel(Hardware::CurrentLevel::Pop);
     hardware.selectCell(targetCoord.second, targetCoord.first);
-    hardware.setCurrentLevel(Hardware::CurrentLevel::Pop);
     hardware.excite(targetPlayer, true);
 
     float currentMa = hardware.readCurrentMa();
+    Serial.print("currentMa: ");
+    Serial.println(currentMa);
+
+    Serial.print("Board::update status=");
+    Serial.print(status == BoardStatus::CHARGING ? "CHARGING" : "IDLE");
+    Serial.print(" currentLevelPin=");
+    Serial.print(digitalRead(cfg::CURRENT_LEVEL_PIN));
+    Serial.print(" p1ExcitePin=");
+    Serial.print(digitalRead(cfg::P1_EXCITE_PIN));
+    Serial.print(" p2ExcitePin=");
+    Serial.print(digitalRead(cfg::P2_EXCITE_PIN));
+    Serial.print(" targetPlayer=");
+    Serial.print(targetPlayer == P1 ? "P1" : "P2");
+    Serial.print(" targetCoord=(");
+    Serial.print(targetCoord.first);
+    Serial.print(",");
+    Serial.print(targetCoord.second);
+    Serial.println(")");
+
     bool poppedDetected = false; //currentMa < cfg::POPPED_THRESHOLD_MA;
     bool timedOut = millis() - chargeStartMs >= cfg::POP_TIMEOUT_MS;
 
+    Serial.println("timedOut: " + String(timedOut ? "true" : "false"));
+    Serial.println("millis() - chargeStartMs: " + String(millis() - chargeStartMs));
+
     if (poppedDetected || timedOut) {
         hardware.excite(targetPlayer, false);
+        // hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
         status = BoardStatus::IDLE;
 
         if (poppedDetected) {
@@ -81,7 +104,7 @@ void Board::scanSquare(Player player, int x, int y) {
 
     hardware.excite(player, true);
     hardware.selectCell(y, x);
-    delay(100);
+    delay(10);
     float currentMa = hardware.readCurrentMa();
     bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
 
@@ -102,14 +125,14 @@ void Board::scanBoard(Player player) {
 
     hardware.excite(player, true);
     
-    hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
+    // hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
 
     auto& caps = (player == P1) ? P1_caps : P2_caps;
     caps.clear();
     for (int x = 0; x < cfg::BOARD_W; x++) {
         for (int y = 0; y < cfg::BOARD_H; y++) {
             hardware.selectCell(y, x);
-            delay(200);
+            delay(7);
             float currentMa = hardware.readCurrentMa();
             bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
             
@@ -126,7 +149,7 @@ void Board::scanBoard(Player player) {
                 Serial.println("-----A1------");
             }
 
-            if (currentMa > 0.0f) {
+            if (currentMa > 10.0f) {
                 Serial.print("  (");
                 Serial.print(x);
                 Serial.print(",");

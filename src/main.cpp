@@ -8,7 +8,7 @@
 #include "Ship.h"
 #include "Board.h"
 
-#define FRAMERATE 5
+#define FRAMERATE 30
 
 namespace {
 ::Player toDisplayPlayer(core::Player p) {
@@ -29,8 +29,8 @@ void setup() {
     // board.scanBoard(P1);
     // board.scanBoard(P2);
 
-    p1Ship = Ship(board.getCapPositions(P1));
-    p2Ship = Ship(board.getCapPositions(P2));
+    // p1Ship = Ship(board.getCapPositions(P1));
+    // p2Ship = Ship(board.getCapPositions(P2));
     hardwareIOBegin();
     game.processDisplayUpdates(p1Ship, p2Ship);
     printToSerial(display);
@@ -54,7 +54,6 @@ void loop() {
     switch (game.getState()) {
         case core::GameState::IDLE:
 
-            board.scanSquare(P1, 0, 0);
 
             if (!(game.hasPressedButton(core::Player::P1) && game.hasPressedButton(core::Player::P2))) {
                 break;
@@ -62,11 +61,11 @@ void loop() {
             game.resetButtonPresses();
             game.setCurrentPlayer(core::Player::P1);
 
-            // board.scanBoard(P1);
-            // board.scanBoard(P2);
+            board.scanBoard(P1);
+            board.scanBoard(P2);
 
-            // p1Ship = Ship(board.getCapPositions(P1));
-            // p2Ship = Ship(board.getCapPositions(P2));
+            p1Ship = Ship(board.getCapPositions(P1));
+            p2Ship = Ship(board.getCapPositions(P2));
 
             // p1Ship.addCell({0, 0});
             // p1Ship.addCell({1, 0});
@@ -87,9 +86,10 @@ void loop() {
         case core::GameState::SELECTING: {
             core::Player current = game.getCurrentPlayer();
 
-            board.scanBoard(toDisplayPlayer(current));
-            Ship& currentShip = (current == core::Player::P1) ? p1Ship : p2Ship;
-            currentShip = Ship(board.getCapPositions(toDisplayPlayer(current)));
+            // CODE TO SCAN BOARD EVERY LOOP
+            // board.scanBoard(P2);
+            // Ship& currentShip = p2Ship;
+            // currentShip = Ship(board.getCapPositions(P2));
 
             if (game.consumePress(game.getCurrentPlayer())) {
                 core::Player offense = game.getCurrentPlayer();
@@ -97,11 +97,15 @@ void loop() {
                 int32_t x = game.getPlayerInput(offense).x;
                 int32_t y = game.getPlayerInput(offense).y;
 
+                Serial.print("Targeting x: ");
+                Serial.print(x);
+                Serial.print(", y: ");
+                Serial.println(y);
+
                 Ship& defenseShip = (defense == core::Player::P1) ? p1Ship : p2Ship;
                 defenseShip.checkHit({x, y});
 
-
-                // board.popCap(toDisplayPlayer(defense), x, y);
+                board.popCap(toDisplayPlayer(defense), x, y);
                 game.setCurrentPlayer(defense);
             }
 
@@ -123,6 +127,6 @@ void loop() {
     display.show();
 
     // debug: push to serial as well so we can view on laptop
-    // printToSerial(display);
+    printToSerial(display);
 }
 
