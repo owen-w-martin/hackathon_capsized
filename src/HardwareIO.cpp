@@ -95,6 +95,8 @@ void hardwareIOBegin() {
     // Encoder objects configure their own pins and interrupts internally.
 }
 
+// check if we have received an interrupt from any of the hardware (button or encoder) since the last frame
+// if so, update the game state using the callbacks
 bool pollAndApplyHardware(core::Game& game) {
     int32_t p1x = -1 * consumeDetents(g_p1EncX, g_p1EncXBase);
     int32_t p1y = consumeDetents(g_p1EncY, g_p1EncYBase);

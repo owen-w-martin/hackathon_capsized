@@ -26,11 +26,6 @@ void setup() {
     Serial.begin(115200);
     blinkySetup();
     display.begin();
-    // board.scanBoard(P1);
-    // board.scanBoard(P2);
-
-    // p1Ship = Ship(board.getCapPositions(P1));
-    // p2Ship = Ship(board.getCapPositions(P2));
     hardwareIOBegin();
     game.processDisplayUpdates(p1Ship, p2Ship);
     printToSerial(display);
@@ -54,32 +49,31 @@ void loop() {
     switch (game.getState()) {
         case core::GameState::IDLE:
 
+            // if both players have pressed their button, transition to the SELECTING state
+            if ((game.hasPressedButton(core::Player::P1) && game.hasPressedButton(core::Player::P2))) {
+                game.resetButtonPresses();
+                game.setCurrentPlayer(core::Player::P1);
 
-            if (!(game.hasPressedButton(core::Player::P1) && game.hasPressedButton(core::Player::P2))) {
-                break;
-            }
-            game.resetButtonPresses();
-            game.setCurrentPlayer(core::Player::P1);
+                // board.scanBoard(P1);
+                // board.scanBoard(P2);
 
-            board.scanBoard(P1);
-            board.scanBoard(P2);
-
-            p1Ship = Ship(board.getCapPositions(P1));
-            p2Ship = Ship(board.getCapPositions(P2));
-
-            // p1Ship.addCell({0, 0});
-            // p1Ship.addCell({1, 0});
-            // p1Ship.addCell({2, 0});
-
-            // p2Ship.addCell({0, 0});
-            // p2Ship.addCell({0, 1});
-            // p2Ship.addCell({0, 2});
-
-            // p2Ship.addCell({1, 3});
+                // p1Ship = Ship(board.getCapPositions(P1));
+                // p2Ship = Ship(board.getCapPositions(P2));
 
 
-            game.setState(core::GameState::SELECTING);
-            break;
+                p1Ship.addCell({0, 0});
+                p1Ship.addCell({1, 0});
+                p1Ship.addCell({2, 0});
+
+                p2Ship.addCell({0, 0});
+                p2Ship.addCell({0, 1});
+                p2Ship.addCell({0, 2});
+                p2Ship.addCell({1, 3});
+
+                game.setState(core::GameState::SELECTING);
+             }
+
+           break;
         case core::GameState::SHIPSELECT:
             // not used
             break;
