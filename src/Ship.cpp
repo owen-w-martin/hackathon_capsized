@@ -23,14 +23,10 @@ void Ship::addCell(std::pair<int, int> pos) {
     health.push_back(true);
 }
 
-void Ship::draw(PlayerScreen& screen) {
+void Ship::draw(PlayerScreen& screen, CRGB color) {
     for (size_t i = 0; i < coords.size(); i++) {
         int x = cfg::PLAYING_AREA_X0 + coords[i].first;
         int y = cfg::PLAYING_AREA_Y0 + coords[i].second;
-        if (health[i]) {
-            screen(x, y) = CRGB::White; // Healthy part
-        } else {
-            screen(x, y) = CRGB::Red; // Damaged part
-        }
+        screen(x, y) = color;
     }
 }

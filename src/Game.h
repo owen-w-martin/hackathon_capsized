@@ -22,6 +22,21 @@ enum class GameState {
     ENDSCREEN
 };
 
+// Per-cell record of a player's own shots against their opponent's board:
+// nothing yet, a miss, or a hit.
+enum class ShotResult { NONE, MISS, HIT };
+
+// One 10x10 grid of ShotResult per shooting player, indexed the same way as
+// the playing area itself.
+class ShotGrid {
+public:
+    ShotResult&       operator()(int x, int y)       { return _cells[y * cfg::PLAYING_AREA_W + x]; }
+    const ShotResult& operator()(int x, int y) const { return _cells[y * cfg::PLAYING_AREA_W + x]; }
+
+private:
+    ShotResult _cells[cfg::PLAYING_AREA_W * cfg::PLAYING_AREA_H] = {};
+};
+
 class Game {
 public:
     struct PlayerInput {
@@ -61,6 +76,15 @@ public:
 
     const PlayerInput& getPlayerInput(Player p) const { return (p == Player::P1) ? m_p1 : m_p2; }
 
+    // Records the outcome of a shot the given player just fired against
+    // their opponent's board, for later display on that player's own screen.
+    void recordShot(Player shooter, int x, int y, bool hit) {
+        ShotGrid& grid = (shooter == Player::P1) ? m_p1Shots : m_p2Shots;
+        grid(x, y) = hit ? ShotResult::HIT : ShotResult::MISS;
+    }
+
+    const ShotGrid& getShots(Player shooter) const { return (shooter == Player::P1) ? m_p1Shots : m_p2Shots; }
+
     // (Re)draws the current cursor/button/ship state onto the display. Ships
     // are the base layer, so state-driven overlays (concealment, crosshair,
     // border) composite on top of them correctly.
@@ -71,6 +95,7 @@ private:
     PlayerInput m_p1, m_p2;
     GameState m_state = GameState::IDLE;
     Player m_currentPlayer = Player::P1;
+    ShotGrid m_p1Shots, m_p2Shots;   // each player's own shot history against their opponent
 };
 
 }

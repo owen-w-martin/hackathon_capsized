@@ -14,7 +14,10 @@ public:
     Ship(const std::vector<std::pair<int, int>> coords);
 
     bool checkHit(std::pair<int, int> shot);
-    void draw(PlayerScreen& screen);
+
+    // Paints every cell of this ship (regardless of health) in one color --
+    // used to show a player their own fleet's positions.
+    void draw(PlayerScreen& screen, CRGB color);
 
     bool checkIfNoCellsRemaining() const { return std::all_of(health.begin(), health.end(), [](bool h) { return !h; }); }
 

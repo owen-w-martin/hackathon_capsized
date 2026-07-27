@@ -97,7 +97,8 @@ void loop() {
                 Serial.println(y);
 
                 Ship& defenseShip = (defense == core::Player::P1) ? p1Ship : p2Ship;
-                defenseShip.checkHit({x, y});
+                bool hit = defenseShip.checkHit({x, y});
+                game.recordShot(offense, x, y, hit);
 
                 board.popCap(toDisplayPlayer(defense), x, y);
                 game.setCurrentPlayer(defense);
