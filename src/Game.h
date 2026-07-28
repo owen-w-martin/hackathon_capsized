@@ -78,9 +78,11 @@ public:
 
     // Records the outcome of a shot the given player just fired against
     // their opponent's board, for later display on that player's own screen.
+    // Also flags the bar to flash red for the next processDisplayUpdates.
     void recordShot(Player shooter, int x, int y, bool hit) {
         ShotGrid& grid = (shooter == Player::P1) ? m_p1Shots : m_p2Shots;
         grid(x, y) = hit ? ShotResult::HIT : ShotResult::MISS;
+        m_justFired = true;
     }
 
     const ShotGrid& getShots(Player shooter) const { return (shooter == Player::P1) ? m_p1Shots : m_p2Shots; }
@@ -96,6 +98,7 @@ private:
     GameState m_state = GameState::IDLE;
     Player m_currentPlayer = Player::P1;
     ShotGrid m_p1Shots, m_p2Shots;   // each player's own shot history against their opponent
+    bool m_justFired = false;        // set by recordShot(), consumed by the next processDisplayUpdates
 };
 
 }

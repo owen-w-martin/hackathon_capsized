@@ -77,7 +77,7 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         int cx = static_cast<int>(offenseIn.x);
         int cy = static_cast<int>(offenseIn.y);
 
-        const CRGB kSlightBlueTint = CRGB(0, 0, 40);
+        const CRGB kOffenseBlue = CRGB(0, 0, 10);
 
         // Offense aims with a crosshair over their own shot history: cells
         // they haven't fired at yet keep the faint blue tint; cells they
@@ -87,7 +87,7 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         const ShotGrid& offenseShots = getShots(m_currentPlayer);
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++) {
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++) {
-                CRGB c = kSlightBlueTint;
+                CRGB c = kOffenseBlue;
                 switch (offenseShots(x, y)) {
                     case ShotResult::MISS: c = CRGB::White; break;
                     case ShotResult::HIT:  c = CRGB::Red;   break;
@@ -104,7 +104,7 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // red for a hit -- still shows through underneath instead of being
         // clobbered.
         const CRGB kCrosshairColor = CRGB::Red;
-        const uint8_t kCrosshairBlend = 150; // 0..255 -- amount of kCrosshairColor mixed in
+        const uint8_t kCrosshairBlend = 30; // 0..255 -- amount of kCrosshairColor mixed in
 
         for (int x = 0; x < cfg::SCREEN_W; x++) {
             CRGB& px = offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy);
@@ -121,10 +121,14 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // hit on one of their own ship cells -- so defense can see both
         // their fleet and how it's being hit at the same time.
         PlayerScreen& defenseScreen = m_display.player(toDisplayPlayer(defense));
+        const CRGB kDefenseBlue = CRGB(0, 0, 40);
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
-                defenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = CRGB::Blue;
-        defenseShip.draw(defenseScreen, CRGB::Gray);
+                defenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = kDefenseBlue;
+        // CRGB::Gray (128,128,128) reads as near-white on the LEDs -- dim it
+        // down so it's clearly distinct from the white miss marker below.
+        const CRGB kShipGray = CRGB(40, 40, 40);
+        defenseShip.draw(defenseScreen, kShipGray);
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++) {
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++) {
                 switch (offenseShots(x, y)) {
@@ -139,18 +143,43 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
                 }
             }
         }
-    }
-    // Outside SELECTING (e.g. IDLE), the player screens stay solid black --
-    // no cursor.
 
-    // Bar is split in half: left reflects P1's button, right reflects P2's.
-    // Otherwise it shows the ambient color for the current game state.
-    CRGB stateColor = colorForState(m_state);
-    CRGB p1BarColor = m_p1.button ? CRGB(255, 0, 0) : stateColor;
-    CRGB p2BarColor = m_p2.button ? CRGB(255, 0, 0) : stateColor;
-    int half = cfg::SCREEN_W / 2;
-    for (int i = 0; i < half; i++)             m_display.bar()(i) = p1BarColor;
-    for (int i = half; i < cfg::SCREEN_W; i++) m_display.bar()(i) = p2BarColor;
+        // Top bar: highlights the column the offense is currently aiming at
+        // in red, black everywhere else -- lines up with the crosshair's
+        // vertical arm since it shares the same x coordinate. On the frame a
+        // shot was just fired, the whole bar flashes red instead.
+        //
+        // The bar's columns map straight to physical columns (see
+        // Display::show()), but P1's screen is physically mirrored
+        // end-to-end there. So on P1's turn, flip the bar column the same
+        // way to keep it lined up with P1's screen; on P2's turn, whose
+        // screen isn't mirrored, use it as-is.
+        int barCol = cfg::PLAYING_AREA_X0 + cx;
+        if (m_currentPlayer == Player::P1) {
+            barCol = cfg::SCREEN_W - 1 - barCol;
+        }
+
+        if (m_justFired) {
+            m_display.bar().fill(CRGB::Red);
+            m_justFired = false;
+        } else {
+            m_display.bar().clear();
+            m_display.bar()(barCol) = CRGB::Red;
+        }
+    } else {
+        // Outside SELECTING (e.g. IDLE), the player screens stay solid
+        // black -- no cursor.
+
+        // Bar is split in half: left reflects P1's button, right reflects
+        // P2's. Otherwise it shows the ambient color for the current game
+        // state.
+        CRGB stateColor = colorForState(m_state);
+        CRGB p1BarColor = m_p1.button ? CRGB(255, 0, 0) : stateColor;
+        CRGB p2BarColor = m_p2.button ? CRGB(255, 0, 0) : stateColor;
+        int half = cfg::SCREEN_W / 2;
+        for (int i = 0; i < half; i++)             m_display.bar()(i) = p1BarColor;
+        for (int i = half; i < cfg::SCREEN_W; i++) m_display.bar()(i) = p2BarColor;
+    }
 }
 
 }
