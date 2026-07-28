@@ -32,10 +32,12 @@ CRGB colorForState(GameState state) {
 
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
     PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
-    int32_t step = (delta > 0) ? 1 : -1;   // any rotation this way moves exactly one block
-    // y=0 is the bottom of the screen (see Display::show()), so moving "up"
-    // must increase y -- the opposite of the raw encoder step.
-    if (axis == Axis::Y) step = -step;
+    // Both axes are inverted from the raw encoder reading: y=0 is the
+    // bottom of the screen (see Display::show()), so moving "up" must
+    // increase y; and the offense's own screen is drawn mirrored in x (see
+    // processDisplayUpdates), so moving the crosshair visually right must
+    // decrease x.
+    int32_t step = (delta > 0) ? -1 : 1;
     int32_t& coord = (axis == Axis::X) ? in.x : in.y;
     int size = (axis == Axis::X) ? cfg::PLAYING_AREA_W : cfg::PLAYING_AREA_H;
     coord = clampToAxis(coord + step, size);
@@ -77,42 +79,57 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         int cx = static_cast<int>(offenseIn.x);
         int cy = static_cast<int>(offenseIn.y);
 
-        const CRGB kOffenseBlue = CRGB(0, 0, 10);
 
-        // Offense aims with a crosshair over their own shot history: cells
-        // they haven't fired at yet keep the faint blue tint; cells they
-        // have are white (miss) or red (hit). The actual ship layout stays
-        // hidden -- this is the only thing drawn on the offense's screen.
+        // Offense's screen is three stacked layers, back to front: the blue
+        // background, the crosshair on top of it, then their own shot
+        // history (white miss / red hit) on top of that -- so a shot marker
+        // always reads clearly even on the row/column currently being aimed
+        // at. The actual ship layout stays hidden.
+        //
+        // The offense's own screen is mirrored in x relative to the real
+        // target coordinate (cx/cy, used everywhere else -- hit checks, the
+        // defense's ship draw, the shot grid, the bar) so that aiming right
+        // on the offense's own panel lines up with the same visual side on
+        // the defense's panel, compensating for the two players' screens
+        // being physically mirror images of each other.
+        auto mirrorX = [](int x) { return cfg::PLAYING_AREA_W - 1 - x; };
+
         PlayerScreen& offenseScreen = m_display.player(toDisplayPlayer(m_currentPlayer));
         const ShotGrid& offenseShots = getShots(m_currentPlayer);
+
+        // A dim, desaturated yellow-green phosphor color -- reads as a
+        // radar scope glow rather than a saturated "Christmas" green.
+        const CRGB kOffenseBackground = CRGB(5, 10, 2);
+
+        // Layer 1: blue background across the whole playing area.
+        for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
+            for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
+                offenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = kOffenseBackground;
+
+        // Layer 2: the crosshair, drawn solid. Its arms run the full
+        // width/height of the screen so they reach the border.
+        const CRGB kCrosshairColor = CRGB(30, 70, 5); // desaturated neon green, less yellow
+        for (int x = 0; x < cfg::SCREEN_W; x++)
+            offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy) = kCrosshairColor;
+        for (int y = 0; y < cfg::SCREEN_H; y++)
+            offenseScreen(cfg::PLAYING_AREA_X0 + mirrorX(cx), y) = kCrosshairColor;
+
+        // Layer 3: shot history, drawn on top of the crosshair.
+        const CRGB kMissWhite = CRGB(125, 125, 125);
+        const CRGB kHitRed = CRGB(125, 0, 0);
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++) {
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++) {
-                CRGB c = kOffenseBlue;
                 switch (offenseShots(x, y)) {
-                    case ShotResult::MISS: c = CRGB::White; break;
-                    case ShotResult::HIT:  c = CRGB::Red;   break;
-                    case ShotResult::NONE: break;
+                    case ShotResult::MISS:
+                        offenseScreen(cfg::PLAYING_AREA_X0 + mirrorX(x), cfg::PLAYING_AREA_Y0 + y) = kMissWhite;
+                        break;
+                    case ShotResult::HIT:
+                        offenseScreen(cfg::PLAYING_AREA_X0 + mirrorX(x), cfg::PLAYING_AREA_Y0 + y) = kHitRed;
+                        break;
+                    case ShotResult::NONE:
+                        break;
                 }
-                offenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = c;
             }
-        }
-
-        // The crosshair is centered on the targeted cell, but its arms run
-        // the full width/height of the screen so they reach the border. It's
-        // blended (rather than drawn solid) so it reads as a translucent
-        // overlay: a previous shot marker it crosses -- white for a miss,
-        // red for a hit -- still shows through underneath instead of being
-        // clobbered.
-        const CRGB kCrosshairColor = CRGB::Red;
-        const uint8_t kCrosshairBlend = 30; // 0..255 -- amount of kCrosshairColor mixed in
-
-        for (int x = 0; x < cfg::SCREEN_W; x++) {
-            CRGB& px = offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy);
-            px = blend(px, kCrosshairColor, kCrosshairBlend);
-        }
-        for (int y = 0; y < cfg::SCREEN_H; y++) {
-            CRGB& px = offenseScreen(cfg::PLAYING_AREA_X0 + cx, y);
-            px = blend(px, kCrosshairColor, kCrosshairBlend);
         }
 
         // Defense's playing area gets a solid blue backdrop, same footprint,
@@ -121,13 +138,13 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // hit on one of their own ship cells -- so defense can see both
         // their fleet and how it's being hit at the same time.
         PlayerScreen& defenseScreen = m_display.player(toDisplayPlayer(defense));
-        const CRGB kDefenseBlue = CRGB(0, 0, 40);
+        const CRGB kDefenseBackground = CRGB(0, 0, 15);
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
-                defenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = kDefenseBlue;
+                defenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = kDefenseBackground;
         // CRGB::Gray (128,128,128) reads as near-white on the LEDs -- dim it
         // down so it's clearly distinct from the white miss marker below.
-        const CRGB kShipGray = CRGB(40, 40, 40);
+        const CRGB kShipGray = CRGB(25, 25, 25);
         defenseShip.draw(defenseScreen, kShipGray);
         for (int y = 0; y < cfg::PLAYING_AREA_H; y++) {
             for (int x = 0; x < cfg::PLAYING_AREA_W; x++) {
@@ -151,11 +168,11 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         //
         // The bar's columns map straight to physical columns (see
         // Display::show()), but P1's screen is physically mirrored
-        // end-to-end there. So on P1's turn, flip the bar column the same
-        // way to keep it lined up with P1's screen; on P2's turn, whose
-        // screen isn't mirrored, use it as-is.
+        // end-to-end there. It should match the defense's side, so flip the
+        // bar column whenever the defense is P1 (i.e. the offense is P2);
+        // when the defense is P2, whose screen isn't mirrored, use it as-is.
         int barCol = cfg::PLAYING_AREA_X0 + cx;
-        if (m_currentPlayer == Player::P1) {
+        if (defense == Player::P1) {
             barCol = cfg::SCREEN_W - 1 - barCol;
         }
 

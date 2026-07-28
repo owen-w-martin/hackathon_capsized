@@ -26,7 +26,7 @@ constexpr uint8_t P1_ENC_L_A = 12;
 constexpr uint8_t P2_FIRE = 26;
 constexpr uint8_t P1_FIRE = 24;
 
-constexpr uint32_t DEBOUNCE_US = 20000;   // 20ms
+constexpr uint32_t DEBOUNCE_US = 2000;   // 2ms
 
 // PEC11R-style detent encoders click once per full electrical (quadrature)
 // cycle, and the Encoder library counts all 4 edges of that cycle -- so 4

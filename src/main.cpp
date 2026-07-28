@@ -79,15 +79,22 @@ void loop() {
             break;
         case core::GameState::SELECTING: {
             core::Player current = game.getCurrentPlayer();
+            core::Player other = core::otherPlayer(current);
 
             // CODE TO SCAN BOARD EVERY LOOP
             // board.scanBoard(P2);
             // Ship& currentShip = p2Ship;
             // currentShip = Ship(board.getCapPositions(P2));
 
-            if (game.consumePress(game.getCurrentPlayer())) {
-                core::Player offense = game.getCurrentPlayer();
-                core::Player defense = core::otherPlayer(offense);
+            // The defense's button does nothing this turn, but a press
+            // still sets justPressed -- left unconsumed, it would stay
+            // latched and cause an instant, un-aimed auto-fire the moment
+            // this player becomes offense. Drain and discard it here.
+            game.consumePress(other);
+
+            if (game.consumePress(current)) {
+                core::Player offense = current;
+                core::Player defense = other;
                 int32_t x = game.getPlayerInput(offense).x;
                 int32_t y = game.getPlayerInput(offense).y;
 

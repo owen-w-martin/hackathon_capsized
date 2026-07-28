@@ -10,9 +10,9 @@ Ship::Ship(const std::vector<std::pair<int, int>> coords) {
 
 bool Ship::checkHit(std::pair<int, int> shot) {
     for (size_t i = 0; i < coords.size(); ++i) {
-        if (coords[i] == shot && health[i]) {
-            health[i] = false; // Mark this part of the ship as damaged
-            return true; // Hit
+        if (coords[i] == shot) {
+            health[i] = false; // Mark this part of the ship as damaged (no-op if already dead)
+            return true; // Hit -- still a hit even if this cell was already damaged
         }
     }
     return false; // Miss
