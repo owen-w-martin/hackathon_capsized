@@ -34,9 +34,9 @@ void Display::show() {
         int col = i / (cfg::SCREEN_H*2+1);
         int row = i - col * (cfg::SCREEN_H*2+1);
 
-        // P1 region
+        // P2 region (flipped after figuring out board layout)
         if (row < cfg::SCREEN_H) {
-            _leds[i] = _p1(cfg::SCREEN_W - 1 - col, row);
+            _leds[i] = _p2(cfg::SCREEN_W - 1 - col, row);
         }
 
         // bar region
@@ -44,9 +44,9 @@ void Display::show() {
             _leds[i] = _bar(col);
         }
 
-        // P2 region
+        // P1 region (flipped after figuring out board layout)
         else {
-            _leds[i] = _p2(col,  2*cfg::SCREEN_H - row);
+            _leds[i] = _p1(col,  2*cfg::SCREEN_H - row);
         }
 
     }
