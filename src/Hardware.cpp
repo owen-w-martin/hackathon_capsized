@@ -3,13 +3,13 @@
 Hardware::Hardware() {
     for (uint8_t pin : cfg::ROW_PINS) pinMode(pin, OUTPUT);
     for (uint8_t pin : cfg::COL_PINS) pinMode(pin, OUTPUT);
-    pinMode(cfg::P1_EXCITE_PIN, OUTPUT);
-    pinMode(cfg::P2_EXCITE_PIN, OUTPUT);
+    pinMode(cfg::BOARD_SEL_P1, OUTPUT);
+    pinMode(cfg::BOARD_SEL_P2, OUTPUT);
     pinMode(cfg::CURRENT_LEVEL_PIN, OUTPUT);
     pinMode(cfg::CURRENT_SENSE_PIN, INPUT);
 
-    digitalWrite(cfg::P1_EXCITE_PIN, LOW);
-    digitalWrite(cfg::P2_EXCITE_PIN, LOW);
+    digitalWrite(cfg::BOARD_SEL_P1, LOW);
+    digitalWrite(cfg::BOARD_SEL_P2, LOW);
     setCurrentLevel(CurrentLevel::Detect);
 }
 
@@ -21,8 +21,8 @@ void Hardware::selectCell(uint8_t row, uint8_t col) const {
 }
 
 void Hardware::excite(Player p, bool on) const {
-    digitalWrite(cfg::P1_EXCITE_PIN, (p == P1 && on) ? HIGH : LOW);
-    digitalWrite(cfg::P2_EXCITE_PIN, (p == P2 && on) ? HIGH : LOW);
+    digitalWrite(cfg::BOARD_SEL_P1, (p == P1 && on) ? HIGH : LOW);
+    digitalWrite(cfg::BOARD_SEL_P2, (p == P2 && on) ? HIGH : LOW);
 }
 
 void Hardware::setCurrentLevel(CurrentLevel level) const {

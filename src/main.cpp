@@ -54,21 +54,21 @@ void loop() {
                 game.resetButtonPresses();
                 game.setCurrentPlayer(core::Player::P1);
 
-                // board.scanBoard(P1);
-                // board.scanBoard(P2);
+                board.scanBoard(P1);
+                board.scanBoard(P2);
 
-                // p1Ship = Ship(board.getCapPositions(P1));
-                // p2Ship = Ship(board.getCapPositions(P2));
+                p1Ship = Ship(board.getCapPositions(P1));
+                p2Ship = Ship(board.getCapPositions(P2));
 
 
-                p1Ship.addCell({0, 0});
-                p1Ship.addCell({1, 0});
-                p1Ship.addCell({2, 0});
+                // p1Ship.addCell({0, 0});
+                // p1Ship.addCell({1, 0});
+                // p1Ship.addCell({2, 0});
 
-                p2Ship.addCell({0, 0});
-                p2Ship.addCell({0, 1});
-                p2Ship.addCell({0, 2});
-                p2Ship.addCell({1, 3});
+                // p2Ship.addCell({0, 0});
+                // p2Ship.addCell({0, 1});
+                // p2Ship.addCell({0, 2});
+                // p2Ship.addCell({1, 3});
 
                 game.setState(core::GameState::SELECTING);
              }

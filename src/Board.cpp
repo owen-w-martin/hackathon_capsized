@@ -46,11 +46,11 @@ void Board::popCap(Player player, int x, int y){
 void Board::update() {
     if (status != BoardStatus::CHARGING) {
         hardware.excite(P1, false);
-        // hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
+        hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
         return;
     }
 
-    // hardware.setCurrentLevel(Hardware::CurrentLevel::Pop);
+    hardware.setCurrentLevel(Hardware::CurrentLevel::Pop);
     hardware.selectCell(targetCoord.second, targetCoord.first);
     hardware.excite(targetPlayer, true);
 
@@ -63,9 +63,9 @@ void Board::update() {
     Serial.print(" currentLevelPin=");
     Serial.print(digitalRead(cfg::CURRENT_LEVEL_PIN));
     Serial.print(" p1ExcitePin=");
-    Serial.print(digitalRead(cfg::P1_EXCITE_PIN));
+    Serial.print(digitalRead(cfg::BOARD_SEL_P1));
     Serial.print(" p2ExcitePin=");
-    Serial.print(digitalRead(cfg::P2_EXCITE_PIN));
+    Serial.print(digitalRead(cfg::BOARD_SEL_P2));
     Serial.print(" targetPlayer=");
     Serial.print(targetPlayer == P1 ? "P1" : "P2");
     Serial.print(" targetCoord=(");
@@ -82,7 +82,7 @@ void Board::update() {
 
     if (poppedDetected || timedOut) {
         hardware.excite(targetPlayer, false);
-        // hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
+        hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
         status = BoardStatus::IDLE;
 
         if (poppedDetected) {
@@ -125,30 +125,16 @@ void Board::scanBoard(Player player) {
 
     hardware.excite(player, true);
     
-    // hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
+    hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
 
     auto& caps = (player == P1) ? P1_caps : P2_caps;
     caps.clear();
     for (int x = 0; x < cfg::BOARD_W; x++) {
         for (int y = 0; y < cfg::BOARD_H; y++) {
             hardware.selectCell(y, x);
-            delay(7);
+            delay(25);
             float currentMa = hardware.readCurrentMa();
             bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
-            
-            if (x == 0 && y == 0) {
-                Serial.println("-----A1------");
-                Serial.print("  (");
-                Serial.print(x);
-                Serial.print(",");
-                Serial.print(y);
-                Serial.print(") ");
-                Serial.print(currentMa);
-                Serial.print("mA -> ");
-                Serial.println(capPresent ? "present" : "none");
-                Serial.println("-----A1------");
-            }
-
             if (currentMa > 10.0f) {
                 Serial.print("  (");
                 Serial.print(x);

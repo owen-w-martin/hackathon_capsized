@@ -11,8 +11,8 @@ namespace cfg {
 
     // constexpr uint8_t ROW_PINS[4]       = {19, 20, 21, 22};
     // constexpr uint8_t COL_PINS[4]       = {40, 41, 14, 15};
-    constexpr uint8_t P1_EXCITE_PIN     = 33;
-    constexpr uint8_t P2_EXCITE_PIN     = 34;
+    constexpr uint8_t BOARD_SEL_P2     = 34;
+    constexpr uint8_t BOARD_SEL_P1     = 33;
     constexpr uint8_t CURRENT_LEVEL_PIN = 32;
     constexpr uint8_t CURRENT_SENSE_PIN = 27;
 

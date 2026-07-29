@@ -26,7 +26,9 @@ constexpr uint8_t P1_ENC_L_A = 12;
 constexpr uint8_t P2_FIRE = 26;
 constexpr uint8_t P1_FIRE = 24;
 
-constexpr uint32_t DEBOUNCE_US = 2000;   // 2ms
+// Mechanical switches can bounce for well over 2ms; 10ms is a safe margin
+// for typical tactile/arcade buttons and is still imperceptible to a player.
+constexpr uint32_t DEBOUNCE_US = 10000;   // 10ms
 
 // PEC11R-style detent encoders click once per full electrical (quadrature)
 // cycle, and the Encoder library counts all 4 edges of that cycle -- so 4
@@ -47,31 +49,47 @@ int32_t g_p1EncYBase = 0;
 int32_t g_p2EncXBase = 0;
 int32_t g_p2EncYBase = 0;
 
-volatile bool     g_p1ButtonPressed    = false;
-volatile bool     g_p1ButtonChanged    = false;
-volatile uint32_t g_p1ButtonLastMicros = 0;
+// Raw, possibly-still-bouncing pin state and the time of its last edge.
+// The ISR never gates on time -- it just records what it saw and when.
+volatile bool     g_p1ButtonRaw        = false;
+volatile uint32_t g_p1ButtonLastEdgeUs = 0;
 
-volatile bool     g_p2ButtonPressed    = false;
-volatile bool     g_p2ButtonChanged    = false;
-volatile uint32_t g_p2ButtonLastMicros = 0;
+volatile bool     g_p2ButtonRaw        = false;
+volatile uint32_t g_p2ButtonLastEdgeUs = 0;
 
-// Debounced in the ISR itself so callers never see a bounce as a real change.
+// Last state we actually reported to the caller, i.e. what the pin settled
+// to once it went quiet for DEBOUNCE_US. Only touched from pollAndApplyHardware.
+bool g_p1ButtonStable = false;
+bool g_p2ButtonStable = false;
+
 void p1ButtonISR() {
-    uint32_t now = micros();
-    if (now - g_p1ButtonLastMicros < DEBOUNCE_US) return;
-    g_p1ButtonLastMicros = now;
-
-    g_p1ButtonPressed = (digitalRead(P1_FIRE) == LOW);   // active-low, INPUT_PULLUP
-    g_p1ButtonChanged = true;
+    g_p1ButtonRaw        = (digitalRead(P1_FIRE) == LOW);   // active-low, INPUT_PULLUP
+    g_p1ButtonLastEdgeUs = micros();
 }
 
 void p2ButtonISR() {
-    uint32_t now = micros();
-    if (now - g_p2ButtonLastMicros < DEBOUNCE_US) return;
-    g_p2ButtonLastMicros = now;
+    g_p2ButtonRaw        = (digitalRead(P2_FIRE) == LOW);   // active-low, INPUT_PULLUP
+    g_p2ButtonLastEdgeUs = micros();
+}
 
-    g_p2ButtonPressed = (digitalRead(P2_FIRE) == LOW);   // active-low, INPUT_PULLUP
-    g_p2ButtonChanged = true;
+// Reports a change only once the pin has been quiet (no edges) for the full
+// debounce window, so a bounce train -- however long -- never gets reported
+// as more than the one real transition it eventually settles into.
+bool debounceButton(volatile bool& raw, volatile uint32_t& lastEdgeUs, bool& stable, bool& pressedOut) {
+    bool rawNow;
+    uint32_t edgeUs;
+    noInterrupts();
+    rawNow = raw;
+    edgeUs = lastEdgeUs;
+    interrupts();
+
+    pressedOut = stable;
+    if (rawNow == stable) return false;
+    if (micros() - edgeUs < DEBOUNCE_US) return false;
+
+    stable     = rawNow;
+    pressedOut = rawNow;
+    return true;
 }
 
 // Returns whole detents moved since last call; keeps any partial-cycle
@@ -103,11 +121,9 @@ bool pollAndApplyHardware(core::Game& game) {
     int32_t p2x = -1 * consumeDetents(g_p2EncX, g_p2EncXBase);
     int32_t p2y = consumeDetents(g_p2EncY, g_p2EncYBase);
 
-    bool p1BtnChanged, p1BtnPressed, p2BtnChanged, p2BtnPressed;
-    noInterrupts();
-    p1BtnChanged = g_p1ButtonChanged; g_p1ButtonChanged = false; p1BtnPressed = g_p1ButtonPressed;
-    p2BtnChanged = g_p2ButtonChanged; g_p2ButtonChanged = false; p2BtnPressed = g_p2ButtonPressed;
-    interrupts();
+    bool p1BtnPressed, p2BtnPressed;
+    bool p1BtnChanged = debounceButton(g_p1ButtonRaw, g_p1ButtonLastEdgeUs, g_p1ButtonStable, p1BtnPressed);
+    bool p2BtnChanged = debounceButton(g_p2ButtonRaw, g_p2ButtonLastEdgeUs, g_p2ButtonStable, p2BtnPressed);
 
     bool applied = false;
     if (p1x != 0) { game.onEncoderInput(core::Player::P1, core::Game::Axis::X, p1x); applied = true; }
