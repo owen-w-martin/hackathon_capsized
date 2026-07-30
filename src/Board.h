@@ -13,7 +13,7 @@ namespace cfg {
     // TODO: calibrate against real hardware -- an intact capacitor should
     // read close to the ~200mA detection current; a popped one should read
     // close to 0.
-    constexpr float POPPED_THRESHOLD_MA = 100.0f;
+    constexpr float POPPED_THRESHOLD_MA = 50.0f;
 
     // TODO: tune to how long it actually takes to pop a capacitor at the Pop
     // current level; this is a safety cutoff for when the current never
@@ -52,7 +52,7 @@ public:
 
     void popCap(Player player, int x, int y);
 
-    bool isCapPopped(std::pair<int, int> pos);
+    bool isCapPopped(Player player, std::pair<int, int> pos);
 
     void scanSquare(Player player, int x, int y);
     BoardStatus getStatus() const { return status; }

@@ -12,6 +12,19 @@ int32_t clampToAxis(int32_t v, int size) {
     return v;
 }
 
+// Outlines a screen's full perimeter (including the decorative border ring)
+// in one solid color.
+void drawBorder(PlayerScreen& screen, CRGB color) {
+    for (int x = 0; x < cfg::SCREEN_W; x++) {
+        screen(x, 0) = color;
+        screen(x, cfg::SCREEN_H - 1) = color;
+    }
+    for (int y = 0; y < cfg::SCREEN_H; y++) {
+        screen(0, y) = color;
+        screen(cfg::SCREEN_W - 1, y) = color;
+    }
+}
+
 // Ambient color shown on the top bar for the current game state.
 CRGB colorForState(GameState state) {
     switch (state) {
@@ -24,14 +37,10 @@ CRGB colorForState(GameState state) {
     return CRGB::Black;
 }
 
-::Player toDisplayPlayer(Player p) {
-    return (p == Player::P1) ? ::P1 : ::P2;
-}
-
 }  // namespace
 
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
-    PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
+    PlayerInput& in = playerInput(p);
     // Both axes are inverted from the raw encoder reading: y=0 is the
     // bottom of the screen (see Display::show()), so moving "up" must
     // increase y; and the offense's own screen is drawn mirrored in x (see
@@ -44,7 +53,7 @@ void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
 }
 
 void Game::onButtonInput(Player p, bool pressed) {
-    PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
+    PlayerInput& in = playerInput(p);
     bool wasPressed = in.button;
     in.button = pressed;
     if (pressed) in.everPressed = true;
@@ -52,12 +61,11 @@ void Game::onButtonInput(Player p, bool pressed) {
 }
 
 bool Game::hasPressedButton(Player p) const {
-    const PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
-    return in.everPressed;
+    return playerInput(p).everPressed;
 }
 
 bool Game::consumePress(Player p) {
-    PlayerInput& in = (p == Player::P1) ? m_p1 : m_p2;
+    PlayerInput& in = playerInput(p);
     bool result = in.justPressed;
     in.justPressed = false;
     return result;
@@ -66,13 +74,17 @@ bool Game::consumePress(Player p) {
 void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
     m_display.clear();
 
-    if (m_state == GameState::SELECTING) {
+    // SHOOTING shares SELECTING's rendering for now -- offense/defense don't
+    // change until SHOOTING hands the turn back, so there's nothing to
+    // redraw differently yet. Add a dedicated branch here once SHOOTING
+    // grows its own visuals.
+    if (m_state == GameState::SELECTING || m_state == GameState::SHOOTING) {
         // The defender's ship is only relevant for the defense's own screen
         // now -- the offense no longer gets to see it directly, only their
         // own shot history against it.
         Player defense = otherPlayer(m_currentPlayer);
         Ship& defenseShip = (defense == Player::P1) ? p1Ship : p2Ship;
-        const PlayerInput& offenseIn = (m_currentPlayer == Player::P1) ? m_p1 : m_p2;
+        const PlayerInput& offenseIn = playerInput(m_currentPlayer);
 
         // Target cell within the 10x10 grid -- already clamped to range by
         // onEncoderInput, so this is a direct board coordinate.
@@ -130,6 +142,14 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
                         break;
                 }
             }
+        }
+
+        // Once the shot is fired and SHOOTING begins, a dim red border
+        // confirms it's been registered and is now resolving -- distinct
+        // from the plain aiming crosshair shown during SELECTING.
+        if (m_state == GameState::SHOOTING) {
+            const CRGB kShootingBorderColor = CRGB(40, 0, 0);
+            drawBorder(offenseScreen, kShootingBorderColor);
         }
 
         // Defense's playing area gets a solid blue backdrop, same footprint,
@@ -191,8 +211,8 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // P2's. Otherwise it shows the ambient color for the current game
         // state.
         CRGB stateColor = colorForState(m_state);
-        CRGB p1BarColor = m_p1.button ? CRGB(255, 0, 0) : stateColor;
-        CRGB p2BarColor = m_p2.button ? CRGB(255, 0, 0) : stateColor;
+        CRGB p1BarColor = playerInput(Player::P1).button ? CRGB(255, 0, 0) : stateColor;
+        CRGB p2BarColor = playerInput(Player::P2).button ? CRGB(255, 0, 0) : stateColor;
         int half = cfg::SCREEN_W / 2;
         for (int i = 0; i < half; i++)             m_display.bar()(i) = p1BarColor;
         for (int i = half; i < cfg::SCREEN_W; i++) m_display.bar()(i) = p2BarColor;

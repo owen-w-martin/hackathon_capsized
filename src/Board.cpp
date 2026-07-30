@@ -74,7 +74,7 @@ void Board::update() {
     Serial.print(targetCoord.second);
     Serial.println(")");
 
-    bool poppedDetected = false; //currentMa < cfg::POPPED_THRESHOLD_MA;
+    bool poppedDetected = currentMa < cfg::POPPED_THRESHOLD_MA;
     bool timedOut = millis() - chargeStartMs >= cfg::POP_TIMEOUT_MS;
 
     Serial.println("timedOut: " + String(timedOut ? "true" : "false"));
@@ -85,10 +85,14 @@ void Board::update() {
         // hardware.setCurrentLevel(Hardware::CurrentLevel::Detect);
         status = BoardStatus::IDLE;
 
-        if (poppedDetected) {
-            auto& caps = (targetPlayer == P1) ? P1_caps : P2_caps;
-            Capacitor* cap = findCap(caps, targetCoord);
-            if (cap) cap->setPopped();
+        // Either way the capacitor ends up popped -- a clean current-drop
+        // detection and a charge timeout are treated as the same outcome,
+        // just recorded differently (setFaulty vs setPopped) for diagnostics.
+        auto& caps = (targetPlayer == P1) ? P1_caps : P2_caps;
+        Capacitor* cap = findCap(caps, targetCoord);
+        if (cap) {
+            if (poppedDetected) cap->setPopped();
+            else                cap->setFaulty();
         }
     }
 }
@@ -171,6 +175,12 @@ void Board::scanBoard(Player player) {
     Serial.print("/");
     Serial.print(cfg::BOARD_W * cfg::BOARD_H);
     Serial.println(" caps found");
+}
+
+bool Board::isCapPopped(Player player, std::pair<int, int> pos) {
+    auto& caps = (player == P1) ? P1_caps : P2_caps;
+    Capacitor* cap = findCap(caps, pos);
+    return cap && cap->isPopped();
 }
 
 std::vector<std::pair<int, int>> Board::getCapPositions(Player p) const {

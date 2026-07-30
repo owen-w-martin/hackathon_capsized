@@ -10,12 +10,6 @@
 
 #define FRAMERATE 30
 
-namespace {
-::Player toDisplayPlayer(core::Player p) {
-    return (p == core::Player::P1) ? P1 : P2;
-}
-}  // namespace
-
 Display display;
 Board board;
 core::Game game(display);
@@ -46,6 +40,15 @@ void loop() {
     // get inputs from the physical button + encoder
     pollAndApplyHardware(game);
 
+    // Snapshot of the shot fired in SELECTING. Encoders keep moving during
+    // SHOOTING, so the target position and hit/miss result have to be
+    // captured at fire time rather than re-read from live input state once
+    // SHOOTING resolves and records it.
+    static int32_t  s_shotX = 0;
+    static int32_t  s_shotY = 0;
+    static bool     s_shotHit = false;
+    static uint32_t s_shotStartMs = 0;
+
     switch (game.getState()) {
         case core::GameState::IDLE:
 
@@ -54,13 +57,13 @@ void loop() {
                 game.resetButtonPresses();
                 game.setCurrentPlayer(core::Player::P1);
 
-                // board.scanBoard(P1);
-                // board.scanBoard(P2);
+                board.scanBoard(P1);
+                board.scanBoard(P2);
 
-                // p1Ship = Ship(board.getCapPositions(P1));
-                // p2Ship = Ship(board.getCapPositions(P2));
+                p1Ship = Ship(board.getCapPositions(P1));
+                p2Ship = Ship(board.getCapPositions(P2));
 
-
+                /*
                 p1Ship.addCell({0, 0});
                 p1Ship.addCell({1, 0});
                 p1Ship.addCell({2, 0});
@@ -70,6 +73,8 @@ void loop() {
                 p2Ship.addCell({0, 2});
                 p2Ship.addCell({1, 3});
 
+                */
+
                 game.setState(core::GameState::SELECTING);
              }
 
@@ -78,8 +83,8 @@ void loop() {
             // not used
             break;
         case core::GameState::SELECTING: {
-            core::Player current = game.getCurrentPlayer();
-            core::Player other = core::otherPlayer(current);
+            core::Player offense = game.getCurrentPlayer();
+            core::Player defense = core::otherPlayer(offense);
 
             // CODE TO SCAN BOARD EVERY LOOP
             // board.scanBoard(P2);
@@ -90,11 +95,9 @@ void loop() {
             // still sets justPressed -- left unconsumed, it would stay
             // latched and cause an instant, un-aimed auto-fire the moment
             // this player becomes offense. Drain and discard it here.
-            game.consumePress(other);
+            game.consumePress(defense);
 
-            if (game.consumePress(current)) {
-                core::Player offense = current;
-                core::Player defense = other;
+            if (game.consumePress(offense)) {
                 int32_t x = game.getPlayerInput(offense).x;
                 int32_t y = game.getPlayerInput(offense).y;
 
@@ -105,18 +108,43 @@ void loop() {
 
                 Ship& defenseShip = (defense == core::Player::P1) ? p1Ship : p2Ship;
                 bool hit = defenseShip.checkHit({x, y});
-                game.recordShot(offense, x, y, hit);
 
-                board.popCap(toDisplayPlayer(defense), x, y);
-                game.setCurrentPlayer(defense);
+                board.popCap(core::toDisplayPlayer(defense), x, y);
+
+                // The shot is locked in, but offense/defense don't swap yet,
+                // and it isn't recorded onto the display yet either -- both
+                // happen once SHOOTING resolves it below.
+                s_shotX = x;
+                s_shotY = y;
+                s_shotHit = hit;
+                s_shotStartMs = millis();
+                game.setState(core::GameState::SHOOTING);
             }
 
             // check if victory
 
             break;
         }
-        case core::GameState::SHOOTING:
+        case core::GameState::SHOOTING: {
+            core::Player offense = game.getCurrentPlayer();
+            core::Player defense = core::otherPlayer(offense);
+
+            // A hit only resolves once the physical capacitor actually
+            // pops; a miss has nothing to pop, so it just holds for a fixed
+            // beat instead.
+            constexpr uint32_t kMissDelayMs = 5000;
+            bool doneShooting = s_shotHit
+                ? board.isCapPopped(core::toDisplayPlayer(defense), {s_shotX, s_shotY})
+                : (millis() - s_shotStartMs >= kMissDelayMs);
+
+            if (doneShooting) {
+                game.recordShot(offense, s_shotX, s_shotY, s_shotHit);
+                game.endTurn();
+                game.setState(core::GameState::SELECTING);
+            }
+
             break;
+        }
         case core::GameState::ENDSCREEN:
             break;
     }

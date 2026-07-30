@@ -56,11 +56,13 @@ public:
     // True once the given player's button has been pressed at least once.
     bool hasPressedButton(Player p) const;
     void resetButtonPresses() {
-        m_p1.everPressed = m_p2.everPressed = false;
-        // Also clear justPressed -- otherwise the button hold used to
-        // start the game reads back as a fresh, un-aimed shot the moment
-        // SELECTING begins.
-        m_p1.justPressed = m_p2.justPressed = false;
+        for (PlayerInput& in : m_players) {
+            in.everPressed = false;
+            // Also clear justPressed -- otherwise the button hold used to
+            // start the game reads back as a fresh, un-aimed shot the moment
+            // SELECTING begins.
+            in.justPressed = false;
+        }
     }
 
     // True if the given player's button was freshly pressed since the last
@@ -70,22 +72,25 @@ public:
     GameState getState() const { return m_state; }
     void setState(GameState state) { m_state = state; }
 
-    // Whose turn it is during SELECTING.
+    // Whose turn it is during SELECTING/SHOOTING.
     Player getCurrentPlayer() const { return m_currentPlayer; }
     void setCurrentPlayer(Player p) { m_currentPlayer = p; }
 
-    const PlayerInput& getPlayerInput(Player p) const { return (p == Player::P1) ? m_p1 : m_p2; }
+    // Hands the turn to the other player. Called when SHOOTING is done
+    // resolving a shot and control passes back to SELECTING.
+    void endTurn() { m_currentPlayer = otherPlayer(m_currentPlayer); }
+
+    const PlayerInput& getPlayerInput(Player p) const { return playerInput(p); }
 
     // Records the outcome of a shot the given player just fired against
     // their opponent's board, for later display on that player's own screen.
     // Also flags the bar to flash red for the next processDisplayUpdates.
     void recordShot(Player shooter, int x, int y, bool hit) {
-        ShotGrid& grid = (shooter == Player::P1) ? m_p1Shots : m_p2Shots;
-        grid(x, y) = hit ? ShotResult::HIT : ShotResult::MISS;
+        shotGrid(shooter)(x, y) = hit ? ShotResult::HIT : ShotResult::MISS;
         m_justFired = true;
     }
 
-    const ShotGrid& getShots(Player shooter) const { return (shooter == Player::P1) ? m_p1Shots : m_p2Shots; }
+    const ShotGrid& getShots(Player shooter) const { return shotGrid(shooter); }
 
     // (Re)draws the current cursor/button/ship state onto the display. Ships
     // are the base layer, so state-driven overlays (concealment, crosshair,
@@ -93,12 +98,20 @@ public:
     void processDisplayUpdates(Ship& p1Ship, Ship& p2Ship);
 
 private:
+    // Per-player state lives in 2-element arrays indexed by Player (P1 = 0,
+    // P2 = 1), so "this player's slot" vs. "the other player's slot" is a
+    // single indexed access instead of a P1/P2 ternary repeated at every use.
+    PlayerInput&       playerInput(Player p)       { return m_players[static_cast<size_t>(p)]; }
+    const PlayerInput& playerInput(Player p) const { return m_players[static_cast<size_t>(p)]; }
+    ShotGrid&       shotGrid(Player p)       { return m_shots[static_cast<size_t>(p)]; }
+    const ShotGrid& shotGrid(Player p) const { return m_shots[static_cast<size_t>(p)]; }
+
     Display& m_display;
-    PlayerInput m_p1, m_p2;
+    PlayerInput m_players[2];
     GameState m_state = GameState::IDLE;
     Player m_currentPlayer = Player::P1;
-    ShotGrid m_p1Shots, m_p2Shots;   // each player's own shot history against their opponent
-    bool m_justFired = false;        // set by recordShot(), consumed by the next processDisplayUpdates
+    ShotGrid m_shots[2];       // each player's own shot history against their opponent
+    bool m_justFired = false; // set by recordShot(), consumed by the next processDisplayUpdates
 };
 
 }
