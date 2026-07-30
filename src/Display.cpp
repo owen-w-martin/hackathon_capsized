@@ -41,7 +41,7 @@ void Display::show() {
 
         // bar region
         else if (row == cfg::SCREEN_H) { 
-            _leds[i] = _bar(col);
+            _leds[i] = _bar(cfg::SCREEN_W - 1 - col);
         }
 
         // P1 region (flipped after figuring out board layout)

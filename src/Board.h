@@ -7,8 +7,8 @@
 #include "Hardware.h"
 
 namespace cfg {
-    constexpr int BOARD_W = 10;       // per-player grid width  (cells)
-    constexpr int BOARD_H = 10;       // per-player grid height (cells)
+    constexpr int BOARD_W = BOARD_SIZE;       // per-player grid width  (cells)
+    constexpr int BOARD_H = BOARD_SIZE;       // per-player grid height (cells)
 
     // TODO: calibrate against real hardware -- an intact capacitor should
     // read close to the ~200mA detection current; a popped one should read

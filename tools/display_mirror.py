@@ -93,10 +93,19 @@ def draw_grid(surface, origin, pixels):
     for y in range(BOARD_H):
         for x in range(BOARD_W):
             color = pixels[y * BOARD_W + x]
-            # y=0 is the bottom of the screen (see Display::show()), so flip
-            # the row when drawing to match the physical board.
-            row = BOARD_H - 1 - y
-            rect = (ox + x * CELL, oy + row * CELL, CELL - 1, CELL - 1)
+            # Two physical facts compose here:
+            #  1. y=0 is the bottom of the screen in game coordinates (see
+            #     Display::show()), so a naive top-down draw needs the row
+            #     flipped: row = BOARD_H-1-y, col = x.
+            #  2. Both players' physical boards are mounted rotated 90
+            #     degrees counterclockwise (see Hardware::selectCell) --
+            #     Display::show() doesn't compensate for this on the LED
+            #     side, so what actually lights up is rotated relative to
+            #     what the game intends. Composing (1) with a 90 CCW
+            #     rotation of that intended position works out to:
+            row = (BOARD_H - 1) - x
+            col = (BOARD_W - 1) - y
+            rect = (ox + col * CELL, oy + row * CELL, CELL - 1, CELL - 1)
             pygame.draw.rect(surface, color, rect)
 
 

@@ -6,6 +6,11 @@
 #include "Display.h"
 
 namespace cfg {
+    // Cells addressable per axis on the row/column select bus. This is the
+    // single source of truth for board size -- Board.h's BOARD_W/BOARD_H
+    // reference it rather than redeclaring it.
+    constexpr uint8_t BOARD_SIZE = 10;
+
     constexpr uint8_t ROW_PINS[4]       = {22, 21, 20, 19};
     constexpr uint8_t COL_PINS[4]       = {15, 14, 41, 40};
 

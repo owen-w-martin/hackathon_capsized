@@ -129,6 +129,6 @@ void loop() {
     display.show();
 
     // debug: push to serial as well so we can view on laptop
-    printToSerial(display);
+    // printToSerial(display);
 }
 

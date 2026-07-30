@@ -14,10 +14,22 @@ Hardware::Hardware() {
 }
 
 void Hardware::selectCell(uint8_t row, uint8_t col) const {
-    for (int bit = 0; bit < 4; bit++) {
-        digitalWrite(cfg::ROW_PINS[bit], (row >> bit) & 1);
-        digitalWrite(cfg::COL_PINS[bit], (col >> bit) & 1);
-    }
+    // Both players' physical boards are mounted rotated 90 degrees
+    // counterclockwise relative to the row/col address bus, so compensate
+    // here rather than have every caller reason about the rotation. Both
+    // boards share this bus and are rotated the same way, so one transform
+    // covers both.
+    uint8_t physRow = col;
+    uint8_t physCol = (cfg::BOARD_SIZE - 1) - row;
+
+    digitalWrite(cfg::ROW_PINS[0], (physRow >> 0) & 1);
+    digitalWrite(cfg::COL_PINS[0], (physCol >> 0) & 1);
+    digitalWrite(cfg::ROW_PINS[1], (physRow >> 1) & 1);
+    digitalWrite(cfg::COL_PINS[1], (physCol >> 1) & 1);
+    digitalWrite(cfg::ROW_PINS[2], (physRow >> 2) & 1);
+    digitalWrite(cfg::COL_PINS[2], (physCol >> 2) & 1);
+    digitalWrite(cfg::ROW_PINS[3], (physRow >> 3) & 1);
+    digitalWrite(cfg::COL_PINS[3], (physCol >> 3) & 1);
 }
 
 void Hardware::excite(Player p, bool on) const {
