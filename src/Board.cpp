@@ -51,7 +51,7 @@ void Board::update() {
     }
 
     hardware.setCurrentLevel(Hardware::CurrentLevel::Pop);
-    hardware.selectCell(targetCoord.second, targetCoord.first);
+    hardware.selectCell(targetCoord.first, targetCoord.second);
     hardware.excite(targetPlayer, true);
 
     float currentMa = hardware.readCurrentMa();
@@ -103,7 +103,7 @@ void Board::scanSquare(Player player, int x, int y) {
     Serial.println(")");
 
     hardware.excite(player, true);
-    hardware.selectCell(y, x);
+    hardware.selectCell(x, y);
     delay(10);
     float currentMa = hardware.readCurrentMa();
     bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
@@ -131,20 +131,20 @@ void Board::scanBoard(Player player) {
     caps.clear();
     for (int x = 0; x < cfg::BOARD_W; x++) {
         for (int y = 0; y < cfg::BOARD_H; y++) {
-            hardware.selectCell(y, x);
-            delay(100);
+            hardware.selectCell(x, y);
+            delay(3);
             float currentMa = hardware.readCurrentMa();
             bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
-            // if (currentMa > 10.0f) {
-            //     Serial.print("  (");
-            //     Serial.print(x);
-            //     Serial.print(",");
-            //     Serial.print(y);
-            //     Serial.print(") ");
-            //     Serial.print(currentMa);
-            //     Serial.print("mA -> ");
-            //     Serial.println(capPresent ? "present" : "none");
-            // }
+            if (currentMa > 10.0f) {
+                Serial.print("  (");
+                Serial.print(x);
+                Serial.print(",");
+                Serial.print(y);
+                Serial.print(") ");
+                Serial.print(currentMa);
+                Serial.print("mA -> ");
+                Serial.println(capPresent ? "present" : "none");
+            }
 
             if (capPresent) {
                 caps.emplace_back(std::make_pair(x, y));

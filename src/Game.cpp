@@ -1,5 +1,7 @@
 #include "Game.h"
 
+#include <math.h>
+
 #include "Ship.h"
 
 namespace core {
@@ -97,14 +99,48 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         PlayerScreen& offenseScreen = m_display.player(toDisplayPlayer(m_currentPlayer));
         const ShotGrid& offenseShots = getShots(m_currentPlayer);
 
-        // A dim, desaturated yellow-green phosphor color -- reads as a
-        // radar scope glow rather than a saturated "Christmas" green.
-        const CRGB kOffenseBackground = CRGB(5, 10, 2);
+        // Layer 1: a sonar sweep across the WHOLE screen (border included).
+        // In the 1-pixel border ring it's an unsaturated black-to-gray
+        // gradient, a dim light gray right at its leading edge (not full
+        // white -- too bright against everything else here). Within the
+        // playing area it stays in flavors of green instead -- from the
+        // plain dark phosphor green at rest up to a brighter green at the
+        // sweep's peak, but that peak is still dimmer than the crosshair
+        // color (see kCrosshairColor below) so the crosshair always reads
+        // as the brightest thing on screen.
+        const CRGB kOffenseGreen = CRGB(5, 10, 2);
+        const CRGB kSweepGreenPeak = CRGB(17, 40, 3);   // dimmer than kCrosshairColor (30, 70, 5)
+        const CRGB kSweepBorderPeak = CRGB(50, 50, 50); // dim light gray, not full white
+        constexpr uint32_t kSweepPeriodMs = 2500;
+        constexpr float kSweepTrailRad = PI * 0.4f;   // trailing wedge angle -- was PI/2 (90 deg), now ~72 deg
+        constexpr float kCenterX = (cfg::SCREEN_W - 1) / 2.0f;
+        constexpr float kCenterY = (cfg::SCREEN_H - 1) / 2.0f;
 
-        // Layer 1: blue background across the whole playing area.
-        for (int y = 0; y < cfg::PLAYING_AREA_H; y++)
-            for (int x = 0; x < cfg::PLAYING_AREA_W; x++)
-                offenseScreen(cfg::PLAYING_AREA_X0 + x, cfg::PLAYING_AREA_Y0 + y) = kOffenseBackground;
+        float sweepAngle = (millis() % kSweepPeriodMs) / (float)kSweepPeriodMs * TWO_PI;
+
+        for (int y = 0; y < cfg::SCREEN_H; y++) {
+            for (int x = 0; x < cfg::SCREEN_W; x++) {
+                float cellAngle = atan2f(y - kCenterY, x - kCenterX);
+                if (cellAngle < 0) cellAngle += TWO_PI;
+
+                // How far behind the sweep's leading edge this cell is,
+                // going in the direction of travel.
+                float trail = sweepAngle - cellAngle;
+                if (trail < 0) trail += TWO_PI;
+
+                uint8_t brightness = 0;
+                if (trail < kSweepTrailRad) {
+                    brightness = (uint8_t)(255.0f * (1.0f - trail / kSweepTrailRad));
+                }
+
+                bool inPlayingArea = x >= cfg::PLAYING_AREA_X0 && x < cfg::PLAYING_AREA_X0 + cfg::PLAYING_AREA_W &&
+                                      y >= cfg::PLAYING_AREA_Y0 && y < cfg::PLAYING_AREA_Y0 + cfg::PLAYING_AREA_H;
+                CRGB color = inPlayingArea
+                    ? CRGB::blend(kOffenseGreen, kSweepGreenPeak, brightness)
+                    : CRGB::blend(CRGB::Black, kSweepBorderPeak, brightness);
+                offenseScreen(x, y) = color;
+            }
+        }
 
         // Layer 2: the crosshair, drawn solid. Its arms run the full
         // width/height of the screen so they reach the border.

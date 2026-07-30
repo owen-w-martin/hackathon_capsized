@@ -81,10 +81,12 @@ void loop() {
             core::Player current = game.getCurrentPlayer();
             core::Player other = core::otherPlayer(current);
 
-            // CODE TO SCAN BOARD EVERY LOOP
-            // board.scanBoard(P2);
-            // Ship& currentShip = p2Ship;
-            // currentShip = Ship(board.getCapPositions(P2));
+            // Rescan the defending player's board every loop, since the
+            // defense is free to add/rearrange capacitors before the
+            // offense fires.
+            // board.scanBoard(toDisplayPlayer(other));
+            // Ship& defendingShip = (other == core::Player::P1) ? p1Ship : p2Ship;
+            // defendingShip = Ship(board.getCapPositions(toDisplayPlayer(other)));
 
             // The defense's button does nothing this turn, but a press
             // still sets justPressed -- left unconsumed, it would stay
