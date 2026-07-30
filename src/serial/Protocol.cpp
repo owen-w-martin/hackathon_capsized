@@ -60,6 +60,81 @@ bool parseLine(const std::string& line, InputEvent& out, std::string& err) {
         return true;
     }
 
+    if (cmd == "SCANCELL1" || cmd == "SCANCELL2") {
+        int32_t x, y;
+        if (!(ss >> x >> y)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SCANCELL1") ? InputEvent::Type::ScanCell1 : InputEvent::Type::ScanCell2;
+        out.x = x;
+        out.y = y;
+        return true;
+    }
+
+    if (cmd == "SELROW1" || cmd == "SELROW2") {
+        int32_t row;
+        if (!(ss >> row)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SELROW1") ? InputEvent::Type::SelectRow1 : InputEvent::Type::SelectRow2;
+        out.x = row;
+        return true;
+    }
+
+    if (cmd == "SELCOL1" || cmd == "SELCOL2") {
+        int32_t col;
+        if (!(ss >> col)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SELCOL1") ? InputEvent::Type::SelectCol1 : InputEvent::Type::SelectCol2;
+        out.x = col;
+        return true;
+    }
+
+    if (cmd == "SELCELL1" || cmd == "SELCELL2") {
+        int32_t row, col;
+        if (!(ss >> row >> col)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SELCELL1") ? InputEvent::Type::SelectCell1 : InputEvent::Type::SelectCell2;
+        out.x = row;
+        out.y = col;
+        return true;
+    }
+
+    if (cmd == "SELROWXY1" || cmd == "SELROWXY2") {
+        int32_t x, y;
+        if (!(ss >> x >> y)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SELROWXY1") ? InputEvent::Type::SelectRowXY1 : InputEvent::Type::SelectRowXY2;
+        out.x = x;
+        out.y = y;
+        return true;
+    }
+
+    if (cmd == "SELCOLXY1" || cmd == "SELCOLXY2") {
+        int32_t x, y;
+        if (!(ss >> x >> y)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SELCOLXY1") ? InputEvent::Type::SelectColXY1 : InputEvent::Type::SelectColXY2;
+        out.x = x;
+        out.y = y;
+        return true;
+    }
+
+    if (cmd == "SELCELLXY1" || cmd == "SELCELLXY2") {
+        int32_t x, y;
+        if (!(ss >> x >> y)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "SELCELLXY1") ? InputEvent::Type::SelectCellXY1 : InputEvent::Type::SelectCellXY2;
+        out.x = x;
+        out.y = y;
+        return true;
+    }
+
+    if (cmd == "HOLDCELL1" || cmd == "HOLDCELL2") {
+        int32_t x, y;
+        if (!(ss >> x >> y)) { err = "BAD_ARG"; return false; }
+        out.type = (cmd == "HOLDCELL1") ? InputEvent::Type::HoldCell1 : InputEvent::Type::HoldCell2;
+        out.x = x;
+        out.y = y;
+        return true;
+    }
+
+    if (cmd == "UNHOLDCELL1" || cmd == "UNHOLDCELL2") {
+        out.type = (cmd == "UNHOLDCELL1") ? InputEvent::Type::UnholdCell1 : InputEvent::Type::UnholdCell2;
+        return true;
+    }
+
     err = "UNKNOWN_CMD";
     return false;
 }
