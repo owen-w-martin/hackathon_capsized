@@ -21,6 +21,7 @@ CRGB colorForState(GameState state) {
         case GameState::SHIPSELECT: return CRGB::Black;
         case GameState::SELECTING:  return CRGB::Green;
         case GameState::SHOOTING:   return CRGB::Black;
+        case GameState::SHOOTINGFINISHED: return CRGB::Black;
         case GameState::ENDSCREEN:  return CRGB::Pink;
     }
     return CRGB::Black;
@@ -83,7 +84,8 @@ bool Game::consumePress(Player p) {
 void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
     m_display.clear();
 
-    if (m_state == GameState::SELECTING || m_state == GameState::SHOOTING) {
+    if (m_state == GameState::SELECTING || m_state == GameState::SHOOTING ||
+        m_state == GameState::SHOOTINGFINISHED) {
         // The defender's ship is only relevant for the defense's own screen
         // now -- the offense no longer gets to see it directly, only their
         // own shot history against it.
@@ -146,13 +148,19 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
             }
         }
 
-        // Layer 2: the crosshair, drawn solid. Its arms run the full
-        // width/height of the screen so they reach the border.
-        const CRGB kCrosshairColor = CRGB(30, 70, 5); // desaturated neon green, less yellow
-        for (int x = 0; x < cfg::SCREEN_W; x++)
-            offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy) = kCrosshairColor;
-        for (int y = 0; y < cfg::SCREEN_H; y++)
-            offenseScreen(cfg::PLAYING_AREA_X0 + mirrorX(cx), y) = kCrosshairColor;
+        // Layer 2, SELECTING only: the crosshair, drawn solid, arms running
+        // the full width/height of the screen so they reach the border.
+        // Once a shot's been fired (SHOOTING/SHOOTINGFINISHED) it's gone --
+        // the offense is no longer choosing where to aim, so a crosshair
+        // sitting on the just-fired cell would just be stale clutter over
+        // the converging brackets and the resolved shot marker.
+        if (m_state == GameState::SELECTING) {
+            const CRGB kCrosshairColor = CRGB(30, 70, 5); // desaturated neon green, less yellow
+            for (int x = 0; x < cfg::SCREEN_W; x++)
+                offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy) = kCrosshairColor;
+            for (int y = 0; y < cfg::SCREEN_H; y++)
+                offenseScreen(cfg::PLAYING_AREA_X0 + mirrorX(cx), y) = kCrosshairColor;
+        }
 
         // Layer 3: shot history, drawn on top of the crosshair.
         const CRGB kMissWhite = CRGB(125, 125, 125);
@@ -183,7 +191,7 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // would make the very first frame's "L" a single pixel with
         // zero-length arms, invisible as an L at all.
         if (m_state == GameState::SHOOTING) {
-            constexpr uint32_t kConvergeDurationMs = 10000;
+            constexpr uint32_t kConvergeDurationMs = 7000;
             const CRGB kConvergeColor = CRGB(180, 0, 0);
 
             float t = (millis() - m_shootingStartMs) / (float)kConvergeDurationMs;
@@ -270,11 +278,12 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
             }
         }
 
-        // Top bar: during SHOOTING, pulse the whole bar red (shootingPulse,
-        // computed above). Otherwise, highlight the column the offense is
-        // currently aiming at in red, black everywhere else -- lines up
-        // with the crosshair's vertical arm since it shares the same x
-        // coordinate.
+        // Top bar: during SHOOTING, pulse just the column that was fired at
+        // (shootingPulse, computed above; m_shotX rather than cx, since the
+        // offense's cursor isn't frozen and could have drifted since firing).
+        // Otherwise, highlight the column the offense is currently aiming
+        // at in red, black everywhere else -- lines up with the
+        // crosshair's vertical arm since it shares the same x coordinate.
         //
         // The bar's columns map straight to physical columns (see
         // Display::show()), but P1's screen is physically mirrored
@@ -282,7 +291,12 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // bar column whenever the defense is P1 (i.e. the offense is P2);
         // when the defense is P2, whose screen isn't mirrored, use it as-is.
         if (m_state == GameState::SHOOTING) {
-            m_display.bar().fill(CRGB(shootingPulse, 0, 0));
+            int shotBarCol = cfg::PLAYING_AREA_X0 + m_shotX;
+            if (defense == Player::P1) {
+                shotBarCol = cfg::SCREEN_W - 1 - shotBarCol;
+            }
+            m_display.bar().clear();
+            m_display.bar()(shotBarCol) = CRGB(shootingPulse, 0, 0);
         } else {
             int barCol = cfg::PLAYING_AREA_X0 + cx;
             if (defense == Player::P1) {
