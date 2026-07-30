@@ -70,6 +70,18 @@ public:
     GameState getState() const { return m_state; }
     void setState(GameState state) { m_state = state; }
 
+    // Transitions into SHOOTING and stamps when it began, so
+    // processDisplayUpdates can pace the shooting-phase animations off of
+    // elapsed time. Deliberately leaves m_currentPlayer as the player who
+    // just fired -- the caller swaps it (and calls setState(SELECTING))
+    // once it observes the shot has fully resolved (board select pin
+    // off), so offense/defense here keep meaning "who fired" / "who got
+    // shot at" for the whole SHOOTING phase.
+    void beginShooting() {
+        m_state = GameState::SHOOTING;
+        m_shootingStartMs = millis();
+    }
+
     // Whose turn it is during SELECTING.
     Player getCurrentPlayer() const { return m_currentPlayer; }
     void setCurrentPlayer(Player p) { m_currentPlayer = p; }
@@ -77,12 +89,14 @@ public:
     const PlayerInput& getPlayerInput(Player p) const { return (p == Player::P1) ? m_p1 : m_p2; }
 
     // Records the outcome of a shot the given player just fired against
-    // their opponent's board, for later display on that player's own screen.
-    // Also flags the bar to flash red for the next processDisplayUpdates.
+    // their opponent's board, for later display on that player's own
+    // screen. Also stashes (x, y) as the shooting-phase animation's target
+    // cell (see beginShooting()).
     void recordShot(Player shooter, int x, int y, bool hit) {
         ShotGrid& grid = (shooter == Player::P1) ? m_p1Shots : m_p2Shots;
         grid(x, y) = hit ? ShotResult::HIT : ShotResult::MISS;
-        m_justFired = true;
+        m_shotX = x;
+        m_shotY = y;
     }
 
     const ShotGrid& getShots(Player shooter) const { return (shooter == Player::P1) ? m_p1Shots : m_p2Shots; }
@@ -98,7 +112,8 @@ private:
     GameState m_state = GameState::IDLE;
     Player m_currentPlayer = Player::P1;
     ShotGrid m_p1Shots, m_p2Shots;   // each player's own shot history against their opponent
-    bool m_justFired = false;        // set by recordShot(), consumed by the next processDisplayUpdates
+    int32_t m_shotX = 0, m_shotY = 0;      // set by recordShot(); the SHOOTING animation's target cell
+    uint32_t m_shootingStartMs = 0;        // set by beginShooting(); paces the SHOOTING animations
 };
 
 }

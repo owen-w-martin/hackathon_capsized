@@ -8,7 +8,7 @@
 #include "Ship.h"
 #include "Board.h"
 
-#define FRAMERATE 30
+#define FRAMERATE 100
 
 namespace {
 ::Player toDisplayPlayer(core::Player p) {
@@ -42,41 +42,52 @@ void loop() {
 
     // -- get inputs --
     // debug: get inputs from serial, aka laptop
-    pollAndApplySerial(game, p1Ship, p2Ship);
+    pollAndApplySerial(game, p1Ship, p2Ship, board);
     // get inputs from the physical button + encoder
     pollAndApplyHardware(game);
 
     switch (game.getState()) {
         case core::GameState::IDLE:
 
-            // if both players have pressed their button, transition to the SELECTING state
+            // if both players have pressed their button, kick off the (non-blocking) board scan
             if ((game.hasPressedButton(core::Player::P1) && game.hasPressedButton(core::Player::P2))) {
                 game.resetButtonPresses();
-                game.setCurrentPlayer(core::Player::P1);
-
-                board.scanBoard(P1);
-                board.scanBoard(P2);
-
-                p1Ship = Ship(board.getCapPositions(P1));
-                p2Ship = Ship(board.getCapPositions(P2));
-
-
-                // p1Ship.addCell({0, 0});
-                // p1Ship.addCell({1, 0});
-                // p1Ship.addCell({2, 0});
-
-                // p2Ship.addCell({0, 0});
-                // p2Ship.addCell({0, 1});
-                // p2Ship.addCell({0, 2});
-                // p2Ship.addCell({1, 3});
-
-                game.setState(core::GameState::SELECTING);
-             }
+                board.beginScan(P1);
+                game.setState(core::GameState::SHIPSELECT);
+            }
 
            break;
-        case core::GameState::SHIPSELECT:
-            // not used
+        case core::GameState::SHIPSELECT: {
+            // Gate state for the non-blocking board scan kicked off above --
+            // board.update() (called at the top of loop(), every
+            // iteration) is what actually advances it a step at a time.
+            // Scans P1 first, then P2, then builds both ships and starts
+            // the game.
+            static bool scanningP2 = false;
+            if (board.getStatus() == BoardStatus::IDLE) {
+                if (!scanningP2) {
+                    p1Ship = Ship(board.getCapPositions(P1));
+                    board.beginScan(P2);
+                    scanningP2 = true;
+                } else {
+                    p2Ship = Ship(board.getCapPositions(P2));
+                    scanningP2 = false;
+
+                    // p1Ship.addCell({0, 0});
+                    // p1Ship.addCell({1, 0});
+                    // p1Ship.addCell({2, 0});
+
+                    // p2Ship.addCell({0, 0});
+                    // p2Ship.addCell({0, 1});
+                    // p2Ship.addCell({0, 2});
+                    // p2Ship.addCell({1, 3});
+
+                    game.setCurrentPlayer(core::Player::P1);
+                    game.setState(core::GameState::SELECTING);
+                }
+            }
             break;
+        }
         case core::GameState::SELECTING: {
             core::Player current = game.getCurrentPlayer();
             core::Player other = core::otherPlayer(current);
@@ -84,7 +95,7 @@ void loop() {
             // Rescan the defending player's board every loop, since the
             // defense is free to add/rearrange capacitors before the
             // offense fires.
-            // board.scanBoard(toDisplayPlayer(other));
+            // board.beginScan(toDisplayPlayer(other));
             // Ship& defendingShip = (other == core::Player::P1) ? p1Ship : p2Ship;
             // defendingShip = Ship(board.getCapPositions(toDisplayPlayer(other)));
 
@@ -110,7 +121,9 @@ void loop() {
                 game.recordShot(offense, x, y, hit);
 
                 board.popCap(toDisplayPlayer(defense), x, y);
-                game.setCurrentPlayer(defense);
+                // Current player swaps only once SHOOTING ends (below) --
+                // see Game::beginShooting().
+                game.beginShooting();
             }
 
             // check if victory
@@ -118,6 +131,15 @@ void loop() {
             break;
         }
         case core::GameState::SHOOTING:
+            // Stay here for exactly as long as the board select pin is on
+            // (i.e. Board's pop-charge cycle is still running); once it's
+            // back to IDLE the shot has fully resolved, so hand the turn
+            // to whoever just got shot at and resume SELECTING.
+            if (board.getStatus() != BoardStatus::CHARGING) {
+                core::Player justFired = game.getCurrentPlayer();
+                game.setCurrentPlayer(core::otherPlayer(justFired));
+                game.setState(core::GameState::SELECTING);
+            }
             break;
         case core::GameState::ENDSCREEN:
             break;
@@ -131,6 +153,6 @@ void loop() {
     display.show();
 
     // debug: push to serial as well so we can view on laptop
-    // printToSerial(display);
+    printToSerial(display);
 }
 
