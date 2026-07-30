@@ -42,9 +42,24 @@ public:
     // Drives the 4-bit row/column address bus to select one cell.
     void selectCell(uint8_t row, uint8_t col) const;
 
+    // Raw address-bus writes for probing the demux directly: no rotation
+    // compensation (see selectCell()) and no board excitation -- these
+    // just drive ROW_PINS or COL_PINS to the given 4-bit value, leaving
+    // everything else (including the other axis) untouched.
+    void selectRawRow(uint8_t row) const;
+    void selectRawCol(uint8_t col) const;
+
+    // Same idea, but rotation-compensated like selectCell() -- i.e. these
+    // take the same (row, col) a real selectCell() call would, and only
+    // write the one bus asked for. Both still take (row, col): the
+    // rotation ties the two axes together (see selectCell()), so a single
+    // axis's physical value can depend on the other's game coordinate.
+    void selectRowForCell(uint8_t row, uint8_t col) const;
+    void selectColForCell(uint8_t row, uint8_t col) const;
+
     // Enables this player's board excitation and disables the other
     // player's, so at most one board is ever live at a time.
-    void excite(Player p, bool on) const;
+    void enableBoardSelect(Player p, bool on) const;
 
     void setCurrentLevel(CurrentLevel level) const;
 

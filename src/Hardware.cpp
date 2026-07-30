@@ -1,5 +1,20 @@
 #include "Hardware.h"
 
+namespace {
+
+// Both players' physical boards are mounted rotated 90 degrees
+// counterclockwise relative to the row/col address bus, so compensate
+// here rather than have every caller reason about the rotation. Both
+// boards share this bus and are rotated the same way, so one transform
+// covers both. Shared by every entry point that turns a game (row, col)
+// coordinate into the bus's actual (physRow, physCol) address.
+void rotatedAddress(uint8_t row, uint8_t col, uint8_t& physRow, uint8_t& physCol) {
+    physRow = col;
+    physCol = (cfg::BOARD_SIZE - 1) - row;
+}
+
+}  // namespace
+
 Hardware::Hardware() {
     for (uint8_t pin : cfg::ROW_PINS) pinMode(pin, OUTPUT);
     for (uint8_t pin : cfg::COL_PINS) pinMode(pin, OUTPUT);
@@ -14,13 +29,8 @@ Hardware::Hardware() {
 }
 
 void Hardware::selectCell(uint8_t row, uint8_t col) const {
-    // Both players' physical boards are mounted rotated 90 degrees
-    // counterclockwise relative to the row/col address bus, so compensate
-    // here rather than have every caller reason about the rotation. Both
-    // boards share this bus and are rotated the same way, so one transform
-    // covers both.
-    uint8_t physRow = col;
-    uint8_t physCol = (cfg::BOARD_SIZE - 1) - row;
+    uint8_t physRow, physCol;
+    rotatedAddress(row, col, physRow, physCol);
 
     digitalWrite(cfg::ROW_PINS[0], (physRow >> 0) & 1);
     digitalWrite(cfg::COL_PINS[0], (physCol >> 0) & 1);
@@ -32,7 +42,39 @@ void Hardware::selectCell(uint8_t row, uint8_t col) const {
     digitalWrite(cfg::COL_PINS[3], (physCol >> 3) & 1);
 }
 
-void Hardware::excite(Player p, bool on) const {
+void Hardware::selectRowForCell(uint8_t row, uint8_t col) const {
+    uint8_t physRow, physCol;
+    rotatedAddress(row, col, physRow, physCol);
+    digitalWrite(cfg::ROW_PINS[0], (physRow >> 0) & 1);
+    digitalWrite(cfg::ROW_PINS[1], (physRow >> 1) & 1);
+    digitalWrite(cfg::ROW_PINS[2], (physRow >> 2) & 1);
+    digitalWrite(cfg::ROW_PINS[3], (physRow >> 3) & 1);
+}
+
+void Hardware::selectColForCell(uint8_t row, uint8_t col) const {
+    uint8_t physRow, physCol;
+    rotatedAddress(row, col, physRow, physCol);
+    digitalWrite(cfg::COL_PINS[0], (physCol >> 0) & 1);
+    digitalWrite(cfg::COL_PINS[1], (physCol >> 1) & 1);
+    digitalWrite(cfg::COL_PINS[2], (physCol >> 2) & 1);
+    digitalWrite(cfg::COL_PINS[3], (physCol >> 3) & 1);
+}
+
+void Hardware::selectRawRow(uint8_t row) const {
+    digitalWrite(cfg::ROW_PINS[0], (row >> 0) & 1);
+    digitalWrite(cfg::ROW_PINS[1], (row >> 1) & 1);
+    digitalWrite(cfg::ROW_PINS[2], (row >> 2) & 1);
+    digitalWrite(cfg::ROW_PINS[3], (row >> 3) & 1);
+}
+
+void Hardware::selectRawCol(uint8_t col) const {
+    digitalWrite(cfg::COL_PINS[0], (col >> 0) & 1);
+    digitalWrite(cfg::COL_PINS[1], (col >> 1) & 1);
+    digitalWrite(cfg::COL_PINS[2], (col >> 2) & 1);
+    digitalWrite(cfg::COL_PINS[3], (col >> 3) & 1);
+}
+
+void Hardware::enableBoardSelect(Player p, bool on) const {
     digitalWrite(cfg::BOARD_SEL_P1, (p == P1 && on) ? HIGH : LOW);
     digitalWrite(cfg::BOARD_SEL_P2, (p == P2 && on) ? HIGH : LOW);
 }
