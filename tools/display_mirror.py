@@ -27,14 +27,20 @@ Controls:
     2 SELROWXY   (A, B) = (x, y)      6 SELROW    A = row
     3 SELCOLXY   (A, B) = (x, y)      7 SELCOL    A = col
     4 SELCELLXY  (A, B) = (x, y)      8 SELCELL   (A, B) = (row, col)
+
+  G -- toggle a live currentMa graph (parsed from the debug log), shown
+       in its own full-width panel below everything else.
 """
 
 import argparse
 import collections
 import colorsys
+import math
 import queue
+import re
 import sys
 import threading
+import time
 
 import pygame
 
@@ -45,7 +51,68 @@ GAP = 24
 MARGIN = 20
 BAR_H = 40
 LOG_W = 360
+GRAPH_H = 220
 LOG_MAX_LINES = 200   # scrollback kept; only what fits the panel is drawn
+
+GRAPH_KEY = pygame.K_g
+GRAPH_WINDOW_S = 30.0    # seconds of history shown, scrolling
+GRAPH_MAX_SAMPLES = 6000  # hard backstop regardless of sample rate
+GRAPH_MA_TICK_LINES = 5  # roughly this many mA gridlines, spacing picked to fit the data
+GRAPH_MIN_MAX_MA = 10.0  # never autoscale tighter than this, even if readings are ~0
+GRAPH_TIME_TICK_S = 2.0  # time gridline spacing
+# cfg::POPPED_THRESHOLD_MA in Board.h -- drawn as a reference line.
+GRAPH_THRESHOLD_MA = 100.0
+# currentMa is only printed while actively CHARGING/HOLDING/SCANNING, so
+# there are real dead periods between readings with no data at all -- a gap
+# bigger than this between two consecutive samples is one of those, not
+# just normal sample-to-sample spacing, so the line breaks instead of
+# bridging across it.
+GRAPH_GAP_BREAK_S = 0.3
+
+# Matches "currentMa: 123.4" / "currentMa=123.4" (Board::update,
+# Board::beginHold) or "123.4mA" (scanCell/stepScan's "-> present/none"
+# lines) -- whichever the log line happens to use.
+_MA_RE = re.compile(r"currentMa[:=]\s*(-?\d+\.?\d*)|(-?\d+\.?\d*)\s*mA")
+
+# Board.cpp's printTimestamp() prefixes every debug line with "T<millis> "
+# (its own elapsed-since-boot clock) -- "T" rather than a bare number so it
+# can't be confused with a line that happens to start with a digit for some
+# other reason.
+_FW_TS_RE = re.compile(r"^T(\d+) (.*)$")
+
+
+def strip_firmware_timestamp(line):
+    """(firmware_ms, rest) if `line` starts with a "T<millis> " prefix,
+    else (None, line)."""
+    m = _FW_TS_RE.match(line)
+    if not m:
+        return None, line
+    return int(m.group(1)), m.group(2)
+
+
+def parse_current_ma(line):
+    m = _MA_RE.search(line)
+    if not m:
+        return None
+    try:
+        return float(m.group(1) or m.group(2))
+    except ValueError:
+        return None
+
+
+def parse_charge_event(line):
+    """"chargeBegin: P1 (x,y)" / "chargeEnd" (see Board::popCap/update) ->
+    "begin" / "end", or None."""
+    if line.startswith("chargeBegin"):
+        return "begin"
+    if line.startswith("chargeEnd"):
+        return "end"
+    return None
+
+
+def _prune_older_than(dq, cutoff):
+    while dq and dq[0][0] < cutoff:
+        dq.popleft()
 
 # The addressable board is 10x10 (cfg::BOARD_SIZE in Hardware.h) -- distinct
 # from BOARD_W/BOARD_H above, which include the LED screen's 1-pixel border.
@@ -138,6 +205,12 @@ def parse_state(line):
 def reader_thread(source, state_queue, log_queue, stop_event):
     while not stop_event.is_set():
         line = source.readline()
+        # Fallback timestamp for lines with no firmware-embedded "T<millis>"
+        # prefix (see strip_firmware_timestamp()) -- this is the Teensy's
+        # serial write time plus USB/OS transfer latency, not its own
+        # clock, so it's jitter-prone under load, but it's all we've got
+        # for lines the firmware doesn't timestamp itself.
+        received_at = time.monotonic()
         if not line:
             continue
         line = line.strip()
@@ -155,7 +228,7 @@ def reader_thread(source, state_queue, log_queue, stop_event):
             state_queue.put(frame)
         else:
             print(line)
-            log_queue.put(line)
+            log_queue.put((received_at, line))
 
 
 def blank_frame():
@@ -299,6 +372,121 @@ def draw_log_panel(surface, origin, size, font, lines):
         surface.blit(text, (ox + 4, content_top + i * line_h))
 
 
+def _nice_tick(max_value, target_lines=GRAPH_MA_TICK_LINES):
+    """Picks a "nice" gridline step (1/2/5 x a power of 10) that gives
+    roughly target_lines gridlines across 0..max_value, so the mA axis
+    still reads cleanly whatever scale the data ends up autoscaled to."""
+    if max_value <= 0:
+        return 1.0
+    raw_step = max_value / target_lines
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    for mult in (1, 2, 5, 10):
+        step = mult * magnitude
+        if step >= raw_step:
+            return step
+    return 10 * magnitude
+
+
+def draw_current_graph(surface, origin, size, font, history, charge_events, now):
+    """Live plot of currentMa readings parsed out of the debug log (see
+    parse_current_ma()), against firmware-embedded time -- most recent at
+    the right edge (t=0s), scrolling left over a GRAPH_WINDOW_S window.
+    The mA axis autoscales to whatever's actually in the visible window
+    (with headroom, see _nice_tick()) rather than a fixed cap, since
+    currentMa's range varies a lot between idle noise and an active
+    charge. Also draws a reference line at GRAPH_THRESHOLD_MA
+    (cfg::POPPED_THRESHOLD_MA) and vertical green/red markers at
+    charge_events' "chargeBegin"/"chargeEnd" timestamps (see
+    parse_charge_event()). The data line breaks across gaps wider than
+    GRAPH_GAP_BREAK_S instead of bridging real dead time with a fake
+    connecting segment."""
+    ox, oy = origin
+    w, h = size
+    pygame.draw.rect(surface, (25, 25, 25), (ox, oy, w, h))
+    pygame.draw.rect(surface, (80, 80, 80), (ox, oy, w, h), 1)
+
+    title = font.render("Current (mA) -- G to toggle", True, (150, 150, 150))
+    surface.blit(title, (ox + 4, oy + 2))
+
+    line_h = font.get_linesize()
+    plot_top = oy + 2 + line_h + 4
+    plot_bottom = oy + h - 4 - line_h   # room for the time-axis labels
+    plot_left = ox + 34                # room for the mA-axis labels
+    plot_right = ox + w - 4
+    plot_h = plot_bottom - plot_top
+    plot_w = plot_right - plot_left
+
+    t_start = now - GRAPH_WINDOW_S
+
+    visible = [(t, ma) for t, ma in history if t >= t_start]
+    data_max = max((ma for t, ma in visible), default=0.0)
+    # Headroom above the highest visible reading (and the threshold line,
+    # so it's never pinned to the very top edge), floored so a quiet
+    # window doesn't autoscale down to an illegibly tiny range.
+    graph_max_ma = max(data_max * 1.2, GRAPH_THRESHOLD_MA * 1.1, GRAPH_MIN_MAX_MA)
+    tick_step = _nice_tick(graph_max_ma)
+    graph_max_ma = math.ceil(graph_max_ma / tick_step) * tick_step
+
+    def x_for(t):
+        frac = (t - t_start) / GRAPH_WINDOW_S
+        return plot_left + frac * plot_w
+
+    def y_for(ma):
+        frac = max(0.0, min(1.0, ma / graph_max_ma))
+        return plot_bottom - frac * plot_h
+
+    # mA-axis gridlines + labels.
+    tick_ma = 0.0
+    while tick_ma <= graph_max_ma:
+        y = y_for(tick_ma)
+        pygame.draw.line(surface, (55, 55, 55), (plot_left, y), (plot_right, y), 1)
+        label = font.render(str(int(tick_ma)), True, (110, 110, 110))
+        surface.blit(label, (ox + 2, y - label.get_height() / 2))
+        tick_ma += tick_step
+
+    # Time-axis gridlines + labels, in seconds before now (right edge).
+    first_tick = math.ceil(t_start / GRAPH_TIME_TICK_S) * GRAPH_TIME_TICK_S
+    t = first_tick
+    while t <= now:
+        x = x_for(t)
+        pygame.draw.line(surface, (55, 55, 55), (x, plot_top), (x, plot_bottom), 1)
+        label = font.render(f"-{now - t:.0f}s", True, (110, 110, 110))
+        surface.blit(label, (x - label.get_width() / 2, plot_bottom + 2))
+        t += GRAPH_TIME_TICK_S
+
+    # Reference line at the firmware's popped-detection threshold.
+    thresh_y = y_for(GRAPH_THRESHOLD_MA)
+    pygame.draw.line(surface, (140, 110, 0), (plot_left, thresh_y), (plot_right, thresh_y), 1)
+
+    # Charge begin/end markers.
+    for t, kind in charge_events:
+        if t < t_start:
+            continue
+        x = x_for(t)
+        color = (80, 220, 80) if kind == "begin" else (220, 90, 90)
+        pygame.draw.line(surface, color, (x, plot_top), (x, plot_bottom), 2)
+
+    # Break the line at any gap wider than GRAPH_GAP_BREAK_S rather than
+    # drawing one continuous polyline -- otherwise dead time between
+    # charges reads as a (fake) smooth ramp connecting the last reading
+    # before it to the first reading after.
+    segment = []
+    for t, v in visible:
+        if segment and (t - segment[-1][0]) > GRAPH_GAP_BREAK_S:
+            if len(segment) >= 2:
+                pygame.draw.lines(surface, (80, 220, 80), False,
+                                   [(x_for(st), y_for(sv)) for st, sv in segment], 2)
+            segment = []
+        segment.append((t, v))
+    if len(segment) >= 2:
+        pygame.draw.lines(surface, (80, 220, 80), False,
+                           [(x_for(st), y_for(sv)) for st, sv in segment], 2)
+
+    if history:
+        latest = font.render(f"{history[-1][1]:.1f} mA", True, (80, 220, 80))
+        surface.blit(latest, (plot_right - latest.get_width(), oy + 2))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", required=True, help="serial port of the Teensy (e.g. /dev/ttyACM0)")
@@ -318,14 +506,18 @@ def main():
     grid_w = BOARD_W * CELL
     grid_h = BOARD_H * CELL
     legend_line_h = 22
-    legend_h = legend_line_h * 5
+    legend_h = legend_line_h * 6
     row_gap = 16
+    top_h = grid_h + row_gap + BAR_H   # height of the grids+bar block, matched by the log panel
     # Some extra width beyond the two grids and the log panel -- text-width
     # estimates don't always match what actually renders (font
     # substitution, DPI scaling), so leave real headroom rather than
     # sizing exactly to the content.
-    width = MARGIN * 3 + grid_w * 2 + GAP + LOG_W + 80
-    height = MARGIN + grid_h + row_gap + BAR_H + row_gap + legend_h + MARGIN
+    width = MARGIN * 2 + grid_w * 2 + GAP * 2 + LOG_W + 40
+    # The graph is its own full-width row below the legend, always reserved
+    # in the window (rather than resizing the window when G is toggled) --
+    # just left blank while hidden.
+    height = MARGIN + top_h + row_gap + legend_h + row_gap + GRAPH_H + MARGIN
 
     pygame.init()
     pygame.key.set_repeat(250, 60)
@@ -335,18 +527,30 @@ def main():
     log_font = pygame.font.SysFont("monospace", 14)
     clock = pygame.time.Clock()
     log_lines = collections.deque(maxlen=LOG_MAX_LINES)
+    current_ma_history = collections.deque(maxlen=GRAPH_MAX_SAMPLES)   # (timestamp, ma)
+    charge_events = collections.deque(maxlen=GRAPH_MAX_SAMPLES)        # (timestamp, "begin"|"end")
+    # python monotonic() - firmware seconds, fixed at the first timestamped
+    # line seen -- converts "T<millis>" firmware clock readings into
+    # time.monotonic()'s domain (needed so the graph's scrolling "now" edge,
+    # which has to keep moving even between messages, lines up with them)
+    # without recalibrating every line, which would throw away the whole
+    # point of using the firmware's own clock in the first place.
+    fw_clock_offset = None
 
     p1_origin = (MARGIN, MARGIN)
     p2_origin = (MARGIN + grid_w + GAP, MARGIN)
     bar_origin = (MARGIN, MARGIN + grid_h + row_gap)
     legend_y = MARGIN + grid_h + row_gap + BAR_H + row_gap
     log_origin = (MARGIN + grid_w + GAP + grid_w + GAP, MARGIN)
-    log_size = (LOG_W, grid_h + row_gap + BAR_H)
+    log_size = (LOG_W, top_h)
+    graph_origin = (MARGIN, legend_y + legend_h + row_gap)
+    graph_size = (width - MARGIN * 2, GRAPH_H)
 
     frame = blank_frame()
     test_a, test_b = 0, 0
     debug_target = None   # (player_suffix, predict_target() result) of the last-fired debug command
     holding = None         # player_suffix currently HOLDCELL-ing, or None
+    show_graph = False     # G toggles the currentMa graph panel's visibility
     running = True
     try:
         while running:
@@ -384,6 +588,8 @@ def main():
                         test_b = max(0, test_b - 1)
                     elif event.key == pygame.K_o:
                         test_b = min(DEBUG_BOARD_SIZE - 1, test_b + 1)
+                    elif event.key == GRAPH_KEY:
+                        show_graph = not show_graph
                     elif event.key == HOLD_KEY:
                         if holding is None:
                             player_suffix = "2" if (event.mod & pygame.KMOD_RSHIFT) else "1"
@@ -411,15 +617,38 @@ def main():
 
             while True:
                 try:
-                    log_lines.append(log_queue.get_nowait())
+                    received_at, line = log_queue.get_nowait()
                 except queue.Empty:
                     break
+                fw_ms, line = strip_firmware_timestamp(line)
+                if fw_ms is not None:
+                    fw_s = fw_ms / 1000.0
+                    if fw_clock_offset is None:
+                        fw_clock_offset = received_at - fw_s
+                    ts = fw_s + fw_clock_offset
+                else:
+                    ts = received_at
+                log_lines.append(line)
+                ma = parse_current_ma(line)
+                if ma is not None:
+                    current_ma_history.append((ts, ma))
+                event = parse_charge_event(line)
+                if event is not None:
+                    charge_events.append((ts, event))
+
+            now = time.monotonic()
+            _prune_older_than(current_ma_history, now - GRAPH_WINDOW_S)
+            _prune_older_than(charge_events, now - GRAPH_WINDOW_S)
 
             screen.fill((15, 15, 15))
             draw_grid(screen, p1_origin, frame["p1"], "p1")
             draw_grid(screen, p2_origin, frame["p2"], "p2")
             draw_bar(screen, bar_origin, grid_w * 2 + GAP, frame["bar"])
             draw_log_panel(screen, log_origin, log_size, log_font, log_lines)
+            if show_graph:
+                draw_current_graph(
+                    screen, graph_origin, graph_size, log_font, current_ma_history, charge_events, now
+                )
 
             p2_active = bool(pygame.key.get_mods() & pygame.KMOD_RSHIFT)
             draw_debug_selector(screen, p1_origin, "p1", test_a, test_b, not p2_active)
@@ -437,6 +666,7 @@ def main():
                 "1 SCANCELL  2 SELROWXY  3 SELCOLXY  4 SELCELLXY",
                 "5 HOLDCELL (hold key)  6 SELROW  7 SELCOL  8 SELCELL  (+RShift = P2)",
                 "Dim yellow outline = current (A, B) selector; bright yellow = last fired target",
+                "G -- toggle currentMa graph (green/red lines = charge begin/end)",
             ]
             for i, line in enumerate(legend_lines):
                 text = font.render(line, True, (200, 200, 200))
