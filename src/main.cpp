@@ -8,7 +8,7 @@
 #include "Ship.h"
 #include "Board.h"
 
-#define FRAMERATE 100
+#define FRAMERATE 60
 // How long SHOOTINGFINISHED holds the resolved (unanimated) board on
 // screen before handing the turn over and returning to SELECTING.
 constexpr uint32_t SHOOTING_FINISHED_MS = 4000;
@@ -31,18 +31,26 @@ void setup() {
     display.begin();
     hardwareIOBegin();
     game.processDisplayUpdates(p1Ship, p2Ship);
+    analogReadResolution(12);
     printToSerial(display);
 }
 
 void loop() {
     static uint32_t lastFrameMs = 0;
     static uint32_t shootingFinishedStartMs = 0;
+    // Tracks the board's scan status as of the end of the previous loop()
+    // call, so we can tell exactly when a scan transitions SCANNING -> IDLE
+    // (i.e. just finished) this iteration -- see scanJustFinished below.
+    static BoardStatus prevBoardStatus = BoardStatus::IDLE;
     uint32_t nowMs = millis();
     if (nowMs - lastFrameMs < 1000 / FRAMERATE) return;
     lastFrameMs = nowMs;
     blinkyUpdate();
 
     board.update();
+    BoardStatus boardStatus = board.getStatus();
+    bool scanJustFinished = (prevBoardStatus == BoardStatus::SCANNING && boardStatus == BoardStatus::IDLE);
+    prevBoardStatus = boardStatus;
 
     // -- get inputs --
     // debug: get inputs from serial, aka laptop
@@ -70,21 +78,21 @@ void loop() {
             static bool scanningP2 = false;
             if (board.getStatus() == BoardStatus::IDLE) {
                 if (!scanningP2) {
-                    // p1Ship = Ship(board.getCapPositions(P1));
-                    // board.beginScan(P2);
+                    p1Ship = Ship(board.getCapPositions(P1));
+                    board.beginScan(P2);
                     scanningP2 = true;
                 } else {
-                    // p2Ship = Ship(board.getCapPositions(P2));
+                    p2Ship = Ship(board.getCapPositions(P2));
                     scanningP2 = false;
 
-                    p1Ship.addCell({0, 0});
-                    p1Ship.addCell({1, 0});
-                    p1Ship.addCell({2, 0});
+                    // p1Ship.addCell({0, 0});
+                    // p1Ship.addCell({1, 0});
+                    // p1Ship.addCell({2, 0});
 
-                    p2Ship.addCell({0, 0});
-                    p2Ship.addCell({0, 1});
-                    p2Ship.addCell({0, 2});
-                    p2Ship.addCell({1, 3});
+                    // p2Ship.addCell({0, 0});
+                    // p2Ship.addCell({0, 1});
+                    // p2Ship.addCell({0, 2});
+                    // p2Ship.addCell({1, 3});
 
                     game.setCurrentPlayer(core::Player::P1);
                     game.setState(core::GameState::SELECTING);
@@ -96,12 +104,25 @@ void loop() {
             core::Player current = game.getCurrentPlayer();
             core::Player other = core::otherPlayer(current);
 
-            // Rescan the defending player's board every loop, since the
-            // defense is free to add/rearrange capacitors before the
+            // Once a scan actually finishes (scanJustFinished), rebuild the
+            // displayed Ship from its results -- this must happen BEFORE
+            // beginScan() below, since beginScan() clears the capacitor
+            // list to start the next scan, and would wipe out the very
+            // results we're about to read. Only rebuilding on
+            // scanJustFinished (rather than every loop) means the board
+            // shown on screen holds its last complete state instead of
+            // flickering through the partial, mid-scan contents of the
+            // capacitor list.
+            if (scanJustFinished) {
+                Ship& defendingShip = (other == core::Player::P1) ? p1Ship : p2Ship;
+                defendingShip = Ship(board.getCapPositions(toDisplayPlayer(other)));
+            }
+
+            // Kick off a rescan of the defending player's board every loop
+            // (beginScan() no-ops while one's already in progress), since
+            // the defense is free to add/rearrange capacitors before the
             // offense fires.
-            // board.beginScan(toDisplayPlayer(other));
-            // Ship& defendingShip = (other == core::Player::P1) ? p1Ship : p2Ship;
-            // defendingShip = Ship(board.getCapPositions(toDisplayPlayer(other)));
+            board.beginScan(toDisplayPlayer(other));
 
             // The defense's button does nothing this turn, but a press
             // still sets justPressed -- left unconsumed, it would stay

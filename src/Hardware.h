@@ -63,6 +63,8 @@ public:
 
     void setCurrentLevel(CurrentLevel level) const;
 
-    // Reads the sense pin and converts it to milliamps.
-    float readCurrentMa() const;
+    // Reads the sense pin and converts it to milliamps. If rawOut is
+    // non-null, the raw ADC count behind that reading is written to it --
+    // for debug logging alongside the interpreted value.
+    float readCurrentMa(int* rawOut = nullptr) const;
 };

@@ -83,11 +83,11 @@ void Hardware::setCurrentLevel(CurrentLevel level) const {
     digitalWrite(cfg::CURRENT_LEVEL_PIN, static_cast<uint8_t>(level));
 }
 
-float Hardware::readCurrentMa() const {
-    // int raw = analogRead(cfg::CURRENT_SENSE_PIN);
+float Hardware::readCurrentMa(int* rawOut) const {
     // float volts = (raw / static_cast<float>(cfg::ADC_MAX_COUNT)) * cfg::ADC_REF_VOLTAGE;
     // return volts * cfg::CURRENT_SENSE_MA_PER_VOLT;
 
-    return static_cast<float>((analogRead(cfg::CURRENT_SENSE_PIN)) * .917f);
-
+    int raw = analogRead(cfg::CURRENT_SENSE_PIN);
+    if (rawOut) *rawOut = raw;
+    return static_cast<float>(raw) * .917f;
 }

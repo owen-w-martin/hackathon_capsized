@@ -74,10 +74,13 @@ void Board::update() {
     }
 
     if (status == BoardStatus::HOLDING) {
-        float currentMa = hardware.readCurrentMa();
+        int rawAdc;
+        float currentMa = hardware.readCurrentMa(&rawAdc);
         printTimestamp();
         Serial.print("holdCell: ");
         Serial.print(holdPlayer == P1 ? "P1" : "P2");
+        Serial.print(" rawAdc=");
+        Serial.print(rawAdc);
         Serial.print(" currentMa=");
         Serial.println(currentMa);
         return;
@@ -93,9 +96,12 @@ void Board::update() {
     hardware.selectCell(targetCoord.first, targetCoord.second);
     hardware.enableBoardSelect(targetPlayer, true);
 
-    float currentMa = hardware.readCurrentMa();
+    int rawAdc;
+    float currentMa = hardware.readCurrentMa(&rawAdc);
     printTimestamp();
-    Serial.print("currentMa: ");
+    Serial.print("rawAdc: ");
+    Serial.print(rawAdc);
+    Serial.print(" currentMa: ");
     Serial.println(currentMa);
 
     // Serial.print("Board::update status=");
@@ -150,7 +156,8 @@ void Board::scanCell(Player player, int x, int y) {
     hardware.enableBoardSelect(player, true);
     hardware.selectCell(x, y);
     delay(5);
-    float currentMa = hardware.readCurrentMa();
+    int rawAdc;
+    float currentMa = hardware.readCurrentMa(&rawAdc);
     bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
 
     if (capPresent) {
@@ -159,7 +166,9 @@ void Board::scanCell(Player player, int x, int y) {
     }
 
     printTimestamp();
-    Serial.print("scanCell: done, ");
+    Serial.print("scanCell: done, rawAdc=");
+    Serial.print(rawAdc);
+    Serial.print(", ");
     Serial.print(currentMa);
     Serial.print("mA -> ");
     Serial.println(capPresent ? "present" : "none");
@@ -197,7 +206,8 @@ void Board::stepScan() {
         return;
     }
 
-    float currentMa = hardware.readCurrentMa();
+    int rawAdc;
+    float currentMa = hardware.readCurrentMa(&rawAdc);
     bool capPresent = currentMa >= cfg::POPPED_THRESHOLD_MA;
     if (currentMa > 10.0f) {
         printTimestamp();
@@ -205,7 +215,9 @@ void Board::stepScan() {
         Serial.print(scanX);
         Serial.print(",");
         Serial.print(scanY);
-        Serial.print(") ");
+        Serial.print(") rawAdc=");
+        Serial.print(rawAdc);
+        Serial.print(", ");
         Serial.print(currentMa);
         Serial.print("mA -> ");
         Serial.println(capPresent ? "present" : "none");
