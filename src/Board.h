@@ -13,12 +13,12 @@ namespace cfg {
     // TODO: calibrate against real hardware -- an intact capacitor should
     // read close to the ~200mA detection current; a popped one should read
     // close to 0.
-    constexpr float POPPED_THRESHOLD_MA = 100.0f;
+    constexpr float POPPED_THRESHOLD_MA = 30.0f;
 
     // TODO: tune to how long it actually takes to pop a capacitor at the Pop
     // current level; this is a safety cutoff for when the current never
     // drops (e.g. a wiring fault or a capacitor that won't pop).
-    constexpr uint32_t POP_TIMEOUT_MS = 12000;
+    constexpr uint32_t POP_TIMEOUT_MS = 20000;
 }
 
 enum class BoardStatus {

@@ -64,7 +64,7 @@ void loop() {
             // if both players have pressed their button, kick off the (non-blocking) board scan
             if ((game.hasPressedButton(core::Player::P1) && game.hasPressedButton(core::Player::P2))) {
                 game.resetButtonPresses();
-                // board.beginScan(P1);
+                board.beginScan(P1);
                 game.setState(core::GameState::SHIPSELECT);
             }
 
@@ -113,16 +113,16 @@ void loop() {
             // shown on screen holds its last complete state instead of
             // flickering through the partial, mid-scan contents of the
             // capacitor list.
-            if (scanJustFinished) {
-                Ship& defendingShip = (other == core::Player::P1) ? p1Ship : p2Ship;
-                defendingShip = Ship(board.getCapPositions(toDisplayPlayer(other)));
-            }
+            // if (scanJustFinished) {
+            //     Ship& defendingShip = (other == core::Player::P1) ? p1Ship : p2Ship;
+            //     defendingShip = Ship(board.getCapPositions(toDisplayPlayer(other)));
+            // }
 
             // Kick off a rescan of the defending player's board every loop
             // (beginScan() no-ops while one's already in progress), since
             // the defense is free to add/rearrange capacitors before the
             // offense fires.
-            board.beginScan(toDisplayPlayer(other));
+            // board.beginScan(toDisplayPlayer(other));
 
             // The defense's button does nothing this turn, but a press
             // still sets justPressed -- left unconsumed, it would stay
