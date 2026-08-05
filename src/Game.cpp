@@ -113,6 +113,65 @@ void drawConvergingCrosshair(PlayerScreen& screen, int targetX, int targetY, flo
     }
 }
 
+// End-screen letters, one string per row with row 0 at the TOP of the panel.
+// Drawn across the full screen rather than just the 10x10 playing area so
+// they're as large as the hardware allows -- there's no board to show here
+// any more, so the border ring is free real estate.
+static_assert(cfg::SCREEN_W == 12 && cfg::SCREEN_H == 12,
+              "end-screen letters are hand-drawn for a 12x12 panel");
+
+// Two vees sharing a centre peak. Deliberately left-right symmetric, so it
+// reads as a W no matter which way round a panel ends up wired.
+const char* const kGlyphWin[cfg::SCREEN_H] = {
+    "110000000011",
+    "110000000011",
+    "011000000110",
+    "011000000110",
+    "011001100110",
+    "011001100110",
+    "001110011100",
+    "001110011100",
+    "001110011100",
+    "001110011100",
+    "000110011000",
+    "000110011000",
+};
+
+// Two-pixel-wide stem down the left, two-pixel foot along the bottom.
+const char* const kGlyphLose[cfg::SCREEN_H] = {
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001100000000",
+    "001111111100",
+    "001111111100",
+};
+
+// Paints one letter onto a panel in a single colour.
+//
+// y counts up from the bottom of the screen while the bitmaps above read
+// top-down, hence the SCREEN_H-1-row flip. No per-player x mirror: both
+// panels turned out to use the exact same transform on the real rig, in
+// spite of what Display::show()'s arithmetic suggests -- see the panel_pos
+// note in tools/display_mirror.py. If a rewired panel ever does come out
+// backwards, the W is symmetric and unaffected; reverse kGlyphLose's strings
+// to fix the L.
+void drawGlyph(PlayerScreen& screen, const char* const rows[], CRGB color) {
+    for (int row = 0; row < cfg::SCREEN_H; row++) {
+        const char* bits = rows[row];
+        int y = cfg::SCREEN_H - 1 - row;
+        for (int x = 0; x < cfg::SCREEN_W; x++) {
+            if (bits[x] == '1') screen(x, y) = color;
+        }
+    }
+}
+
 }  // namespace
 
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
@@ -414,6 +473,31 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
             m_display.bar().clear();
             m_display.bar()(barCol) = CRGB::Red;
         }
+    } else if (m_state == GameState::ENDSCREEN) {
+        // The result, one letter per panel: a big green W for whoever sank
+        // the other fleet, a big red L for whoever lost it. The W breathes so
+        // the win is the animated, alive-looking one; the L is deliberately
+        // flat and dimmer.
+        constexpr uint32_t kPulsePeriodMs = 2000;
+        float phase = (millis() % kPulsePeriodMs) / (float)kPulsePeriodMs * TWO_PI;
+        uint8_t pulse = (uint8_t)((sinf(phase) * 0.5f + 0.5f) * 255);
+
+        const CRGB kWinDim    = CRGB(0, 45, 5);
+        const CRGB kWinBright = CRGB(0, 210, 30);
+        const CRGB kLoseRed   = CRGB(110, 0, 0);
+        CRGB winColor = CRGB::blend(kWinDim, kWinBright, pulse);
+
+        Player loser = otherPlayer(m_winner);
+        drawGlyph(m_display.player(toDisplayPlayer(m_winner)), kGlyphWin, winColor);
+        drawGlyph(m_display.player(toDisplayPlayer(loser)), kGlyphLose, kLoseRed);
+
+        // Bar echoes the result across the same P1-left / P2-right split the
+        // readiness bar uses, the winner's half pulsing in step with their W.
+        int half = cfg::SCREEN_W / 2;
+        CRGB p1BarColor = (m_winner == Player::P1) ? winColor : kLoseRed;
+        CRGB p2BarColor = (m_winner == Player::P2) ? winColor : kLoseRed;
+        for (int i = 0; i < half; i++)             m_display.bar()(i) = p1BarColor;
+        for (int i = half; i < cfg::SCREEN_W; i++) m_display.bar()(i) = p2BarColor;
     } else {
         // Outside SELECTING/SHOOTING (e.g. IDLE), the player screens stay
         // solid black -- except during SHIPSELECT (boards being scanned,

@@ -19,7 +19,17 @@ public:
     // used to show a player their own fleet's positions.
     void draw(PlayerScreen& screen, CRGB color);
 
+    // True once every cell of this ship has been hit.
+    //
+    // CAREFUL: vacuously true for a ship with no cells at all -- std::all_of
+    // over an empty range returns true -- so a fleet that was never placed
+    // reads as "already sunk". Callers deciding a game has been won must
+    // also require cellCount() > 0; see the victory check in main.cpp.
     bool checkIfNoCellsRemaining() const { return std::all_of(health.begin(), health.end(), [](bool h) { return !h; }); }
+
+    // How many cells this ship was built with, alive or dead. Zero means no
+    // capacitors were detected for it -- see checkIfNoCellsRemaining().
+    size_t cellCount() const { return coords.size(); }
 
     // Adds a healthy cell at pos; for testing ship layouts without real
     // capacitor hardware.

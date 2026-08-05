@@ -94,6 +94,15 @@ void loop() {
                     // p2Ship.addCell({0, 2});
                     // p2Ship.addCell({1, 3});
 
+                    // A scan coming back empty means no capacitors were
+                    // detected at all -- none placed, or a wiring/threshold
+                    // problem. Worth shouting about, because an empty fleet
+                    // can't be hit and can't legitimately be sunk; the
+                    // cellCount() guard on the victory check below is what
+                    // keeps it from reading as an instant win instead.
+                    if (p1Ship.cellCount() == 0) Serial.println("WARNING: P1 scan found no capacitors");
+                    if (p2Ship.cellCount() == 0) Serial.println("WARNING: P2 scan found no capacitors");
+
                     game.setCurrentPlayer(core::Player::P1);
                     game.setState(core::GameState::SELECTING);
                 }
@@ -154,7 +163,10 @@ void loop() {
                 game.beginShooting(offense, x, y, hit);
             }
 
-            // check if victory
+            // Victory deliberately isn't checked here -- the shot fired above
+            // hasn't resolved yet. It's checked at the end of
+            // SHOOTINGFINISHED, once the pop is done and the result is on
+            // screen.
 
             break;
         }
@@ -181,8 +193,30 @@ void loop() {
             // got shot at and resume SELECTING.
             if (millis() - shootingFinishedStartMs >= SHOOTING_FINISHED_MS) {
                 core::Player justFired = game.getCurrentPlayer();
-                game.setCurrentPlayer(core::otherPlayer(justFired));
-                game.setState(core::GameState::SELECTING);
+                core::Player defense = core::otherPlayer(justFired);
+                Ship& defenseShip = (defense == core::Player::P1) ? p1Ship : p2Ship;
+                // The cellCount() > 0 half is load-bearing:
+                // checkIfNoCellsRemaining() is vacuously true for a ship with
+                // no cells, so without it a scan that found no capacitors
+                // would hand the game to whoever happened to shoot first.
+                //
+                // NOTE: this assumes ships are built once (at SHIPSELECT) and
+                // damage lives in Ship::health, which is how it works today.
+                // If the per-turn rescan in SELECTING above is ever switched
+                // back on, ships get rebuilt from surviving capacitors and a
+                // sunk fleet legitimately IS an empty one -- at which point
+                // this guard would make the game unwinnable and the check
+                // needs rethinking (compare against the fleet's size at
+                // SHIPSELECT rather than requiring it to be non-empty now).
+                bool won = defenseShip.cellCount() > 0 && defenseShip.checkIfNoCellsRemaining();
+                if (won) {
+                    game.setWinner(justFired);
+                    game.setState(core::GameState::ENDSCREEN);
+                    break;
+                } else {
+                    game.setCurrentPlayer(defense);
+                    game.setState(core::GameState::SELECTING);
+                }
             }
             break;
         case core::GameState::ENDSCREEN:

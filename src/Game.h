@@ -147,6 +147,15 @@ public:
     Player getCurrentPlayer() const { return m_currentPlayer; }
     void setCurrentPlayer(Player p) { m_currentPlayer = p; }
 
+    // Who sank the other fleet. Set alongside the transition into ENDSCREEN
+    // and read by processDisplayUpdates to decide which panel gets the W and
+    // which gets the L. Recorded explicitly rather than inferred from
+    // m_currentPlayer: that happens to still hold the winner today (nothing
+    // swaps it on the way into ENDSCREEN), but relying on it would silently
+    // put the W on the wrong screen the moment that changes.
+    Player getWinner() const { return m_winner; }
+    void setWinner(Player p) { m_winner = p; }
+
     const PlayerInput& getPlayerInput(Player p) const { return (p == Player::P1) ? m_p1 : m_p2; }
 
     const ShotGrid& getShots(Player shooter) const { return (shooter == Player::P1) ? m_p1Shots : m_p2Shots; }
@@ -161,6 +170,7 @@ private:
     PlayerInput m_p1, m_p2;
     GameState m_state = GameState::IDLE;
     Player m_currentPlayer = Player::P1;
+    Player m_winner = Player::P1;          // only meaningful in ENDSCREEN; see setWinner()
     ShotGrid m_p1Shots, m_p2Shots;   // each player's own shot history against their opponent
     int32_t m_shotX = 0, m_shotY = 0;      // set by beginShooting(); the SHOOTING animation's target cell
     uint32_t m_shootingStartMs = 0;        // set by beginShooting(); paces the SHOOTING animations
