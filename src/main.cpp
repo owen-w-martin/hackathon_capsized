@@ -159,15 +159,19 @@ void loop() {
             break;
         }
         case core::GameState::SHOOTING:
-            // Stay here for exactly as long as the board select pin is on
-            // (i.e. Board's pop-charge cycle is still running); once it's
-            // back to IDLE the shot has fully resolved, so reveal it and
-            // move to SHOOTINGFINISHED to hold that result on screen
-            // briefly before handing off the turn.
+            // Once the board select pin drops (i.e. Board's pop-charge
+            // cycle is done -- cap popped or the safety timeout hit),
+            // commit the shot (resolveShot() is idempotent, so calling it
+            // every loop here is fine) and let Game::processDisplayUpdates
+            // play out the reveal animation (snap shut, fade to black,
+            // fade back in on the result) before handing off the turn --
+            // see Game::isShotRevealComplete().
             if (board.getStatus() != BoardStatus::CHARGING) {
                 game.resolveShot();
-                shootingFinishedStartMs = millis();
-                game.setState(core::GameState::SHOOTINGFINISHED);
+                if (game.isShotRevealComplete()) {
+                    shootingFinishedStartMs = millis();
+                    game.setState(core::GameState::SHOOTINGFINISHED);
+                }
             }
             break;
         case core::GameState::SHOOTINGFINISHED:

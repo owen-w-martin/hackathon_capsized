@@ -31,6 +31,28 @@ enum class GameState {
 // nothing yet, a miss, or a hit.
 enum class ShotResult { NONE, MISS, HIT };
 
+// Timing for the SHOOTING-state shot reveal animation (see
+// Game::processDisplayUpdates): the offense's crosshair fades out, regrows
+// from the screen edges in red as the shot is charging, then -- once the
+// shot has actually resolved (cap popped or the safety timeout hit, see
+// Game::resolveShot()) -- snaps fully shut, holds, fades to black, and
+// fades back in on the result. kTotalRevealMs (from the moment of
+// resolution) is what Game::isShotRevealComplete() waits out before the
+// caller is allowed to leave SHOOTING.
+namespace shotReveal {
+    constexpr uint32_t kCrosshairFadeOutMs = 300;   // initial fade of the aiming crosshair
+    // Ease-out time constant for the red regrowth -- kept at 1/5 of
+    // Board's cfg::POP_TIMEOUT_MS (see Board.h) so the close-up nears the
+    // target at roughly the same pace the timeout is scaled to. The
+    // target cell itself is never lit by this growth -- see
+    // Game::processDisplayUpdates -- so it stays a surprise until resolved.
+    constexpr float     kGrowthTauMs       = 1600;
+    constexpr uint32_t kFadeToBlackMs      = 250;   // once resolved: fade everything out
+    constexpr uint32_t kFadeInTargetMs     = 1000;  // then fade in just the target pixel's result
+    constexpr uint32_t kFadeInRestMs       = 1600;  // then fade in everything else around it
+    constexpr uint32_t kTotalRevealMs      = kFadeToBlackMs + kFadeInTargetMs + kFadeInRestMs;
+}
+
 // One 10x10 grid of ShotResult per shooting player, indexed the same way as
 // the playing area itself.
 class ShotGrid {
@@ -94,16 +116,31 @@ public:
         m_shotX = x;
         m_shotY = y;
         m_pendingHit = hit;
+        m_shotResolved = false;
     }
 
     // Commits the shot stashed by beginShooting() into the shooter's
-    // ShotGrid, making the hit/miss marker visible on-screen. Call once
-    // the shot has fully resolved (board select pin off) -- not at fire
-    // time -- so the defense's screen can't reveal a hit before the pop
-    // has actually happened.
+    // ShotGrid, making the hit/miss marker visible on-screen, and stamps
+    // when that happened so the reveal animation in processDisplayUpdates
+    // can time itself off the real event (cap popped or the safety
+    // timeout hit) instead of a fixed countdown. Idempotent -- only the
+    // first call after beginShooting() has any effect -- so the caller can
+    // call it every loop() once the board reports done, rather than having
+    // to track "did I already call this" itself.
     void resolveShot() {
+        if (m_shotResolved) return;
+        m_shotResolved = true;
+        m_shotResolvedMs = millis();
         ShotGrid& grid = (m_pendingShooter == Player::P1) ? m_p1Shots : m_p2Shots;
         grid(m_shotX, m_shotY) = m_pendingHit ? ShotResult::HIT : ShotResult::MISS;
+    }
+
+    // True once the shot has resolved AND the post-resolution reveal
+    // animation (snap shut, hold, fade to black, fade back in) has played
+    // out on the offense's screen -- i.e. it's safe to leave SHOOTING.
+    bool isShotRevealComplete() const {
+        if (!m_shotResolved) return false;
+        return millis() - m_shotResolvedMs >= shotReveal::kTotalRevealMs;
     }
 
     // Whose turn it is during SELECTING.
@@ -129,6 +166,8 @@ private:
     uint32_t m_shootingStartMs = 0;        // set by beginShooting(); paces the SHOOTING animations
     Player m_pendingShooter = Player::P1;  // set by beginShooting(); committed to a ShotGrid by resolveShot()
     bool m_pendingHit = false;             // set by beginShooting(); committed to a ShotGrid by resolveShot()
+    bool m_shotResolved = false;           // set by resolveShot(); gates the SHOOTING reveal animation's phases
+    uint32_t m_shotResolvedMs = 0;         // set by resolveShot(); paces the reveal animation's phases
 };
 
 }

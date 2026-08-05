@@ -46,6 +46,73 @@ uint8_t sweepBrightness(int x, int y, float centerX, float centerY, float sweepA
     return (uint8_t)(255.0f * (1.0f - trail / trailRad));
 }
 
+// Draws a crosshair -- full-width horizontal arm through targetY, full-
+// height vertical arm through targetX -- converging inward from all four
+// screen edges toward the target cell, but deliberately stopping one pixel
+// short of it: the target cell itself is never lit by this function, no
+// matter how close gapScale gets to 0, so it stays dark until the caller
+// explicitly reveals it once the shot's actually resolved. gapScale is the
+// fraction of each arm's original edge-to-target distance that's still
+// unlit: 1 means nothing lit yet (fresh from the edges), ~0 means each arm
+// has closed the gap down to that last held-back pixel.
+//
+// Each arm grows a fractional number of pixels per frame rather than a
+// whole one, so the leading pixel is antialiased -- blended with whatever
+// was already drawn there (the sweep background) in proportion to how far
+// the boundary has crossed into it -- giving smooth sub-pixel motion
+// instead of the arm visibly jumping a whole LED at a time.
+void drawConvergingCrosshair(PlayerScreen& screen, int targetX, int targetY, float gapScale, CRGB color) {
+    if (gapScale < 0.0f) gapScale = 0.0f;
+
+    // Every arm's growth and antialiased leading pixel is clamped to stop
+    // at least one pixel short of the target index, so this function can
+    // never light the target cell itself even at gapScale == 0.
+    float growLeft   = fminf(targetX * (1.0f - gapScale), targetX - 1.0f);
+    float growRight  = fminf((cfg::SCREEN_W - 1 - targetX) * (1.0f - gapScale), cfg::SCREEN_W - 2 - targetX);
+    float growTop    = fminf(targetY * (1.0f - gapScale), targetY - 1.0f);
+    float growBottom = fminf((cfg::SCREEN_H - 1 - targetY) * (1.0f - gapScale), cfg::SCREEN_H - 2 - targetY);
+
+    if (growLeft >= 0.0f) {
+        int leftFull = (int)floorf(growLeft);
+        for (int x = 0; x <= leftFull; x++) screen.setPixel(x, targetY, color);
+        float leftCoverage = growLeft - leftFull;
+        if (leftCoverage > 0.0f) {
+            int x = leftFull + 1;
+            screen.setPixel(x, targetY, CRGB::blend(screen.getPixel(x, targetY), color, (uint8_t)(255 * leftCoverage)));
+        }
+    }
+
+    if (growRight >= 0.0f) {
+        int rightFull = (int)floorf(growRight);
+        for (int i = 0; i <= rightFull; i++) screen.setPixel(cfg::SCREEN_W - 1 - i, targetY, color);
+        float rightCoverage = growRight - rightFull;
+        if (rightCoverage > 0.0f) {
+            int x = cfg::SCREEN_W - 1 - (rightFull + 1);
+            screen.setPixel(x, targetY, CRGB::blend(screen.getPixel(x, targetY), color, (uint8_t)(255 * rightCoverage)));
+        }
+    }
+
+    if (growTop >= 0.0f) {
+        int topFull = (int)floorf(growTop);
+        for (int y = 0; y <= topFull; y++) screen.setPixel(targetX, y, color);
+        float topCoverage = growTop - topFull;
+        if (topCoverage > 0.0f) {
+            int y = topFull + 1;
+            screen.setPixel(targetX, y, CRGB::blend(screen.getPixel(targetX, y), color, (uint8_t)(255 * topCoverage)));
+        }
+    }
+
+    if (growBottom >= 0.0f) {
+        int bottomFull = (int)floorf(growBottom);
+        for (int i = 0; i <= bottomFull; i++) screen.setPixel(targetX, cfg::SCREEN_H - 1 - i, color);
+        float bottomCoverage = growBottom - bottomFull;
+        if (bottomCoverage > 0.0f) {
+            int y = cfg::SCREEN_H - 1 - (bottomFull + 1);
+            screen.setPixel(targetX, y, CRGB::blend(screen.getPixel(targetX, y), color, (uint8_t)(255 * bottomCoverage)));
+        }
+    }
+}
+
 }  // namespace
 
 void Game::onEncoderInput(Player p, Axis axis, int32_t delta) {
@@ -150,12 +217,10 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
 
         // Layer 2, SELECTING only: the crosshair, drawn solid, arms running
         // the full width/height of the screen so they reach the border.
-        // Once a shot's been fired (SHOOTING/SHOOTINGFINISHED) it's gone --
-        // the offense is no longer choosing where to aim, so a crosshair
-        // sitting on the just-fired cell would just be stale clutter over
-        // the converging brackets and the resolved shot marker.
+        // Once a shot's been fired it plays the reveal animation instead
+        // (Layer 4, below) -- fades out, then regrows from the edges.
+        const CRGB kCrosshairColor = CRGB(30, 70, 5); // desaturated neon green, less yellow
         if (m_state == GameState::SELECTING) {
-            const CRGB kCrosshairColor = CRGB(30, 70, 5); // desaturated neon green, less yellow
             for (int x = 0; x < cfg::SCREEN_W; x++)
                 offenseScreen(x, cfg::PLAYING_AREA_Y0 + cy) = kCrosshairColor;
             for (int y = 0; y < cfg::SCREEN_H; y++)
@@ -180,47 +245,84 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
             }
         }
 
-        // Layer 4, SHOOTING only: four red L-shaped brackets travel in from
-        // the screen's corners and converge on the cell just fired at, like
-        // a shrinking targeting reticle. All four share the same t, so they
-        // always move in lockstep; each arm always reaches all the way out
-        // to its own edge of the screen (not a fixed short stub), so at any
-        // moment the four brackets' arms trace a complete (shrinking)
-        // rectangle around the target. The starting vertex is inset one
-        // pixel from the true corner -- starting exactly on the corner
-        // would make the very first frame's "L" a single pixel with
-        // zero-length arms, invisible as an L at all.
+        // Layer 4, SHOOTING only: the shot reveal animation, gated on the
+        // real charge/pop event (see Game::resolveShot()) rather than a
+        // fixed countdown -- durations in shotReveal (Game.h). Runs after
+        // Layer 3, so once resolveShot() has committed the shot, this
+        // layer's fade-to-black/fade-in passes act on the fully composited
+        // frame (sweep + shot marker) rather than pre-empting it. The
+        // target cell itself is deliberately kept dark through every phase
+        // up to the resolve -- it's the one thing this whole animation is
+        // building suspense around -- and only lit again on its own,
+        // ahead of everything else, once the shot has actually resolved:
+        //
+        //   1. the SELECTING crosshair that was sitting on the target cell
+        //      quickly fades to black (target cell excluded).
+        //   2. a red crosshair regrows in from the four screen edges,
+        //      easing out (fast, then slowing) toward the target cell --
+        //      mathematically never quite reaching it -- for as long as
+        //      the shot is still charging.
+        //   3. once the shot actually resolves: fade the whole screen to
+        //      black (target cell forced black throughout, in case Layer 3
+        //      already committed the marker there), then fade in just the
+        //      target cell with the real hit/miss result, then fade in
+        //      everything else around it.
         if (m_state == GameState::SHOOTING) {
-            constexpr uint32_t kConvergeDurationMs = 7000;
-            const CRGB kConvergeColor = CRGB(180, 0, 0);
-
-            float t = (millis() - m_shootingStartMs) / (float)kConvergeDurationMs;
-            if (t > 1.0f) t = 1.0f;
+            using namespace shotReveal;
+            const CRGB kCrosshairRed = CRGB(180, 0, 0);
 
             int targetX = cfg::PLAYING_AREA_X0 + mirrorX(m_shotX);
             int targetY = cfg::PLAYING_AREA_Y0 + m_shotY;
+            uint32_t sinceShotMs = millis() - m_shootingStartMs;
 
-            // {startX, startY, edgeX, edgeY} per corner -- start is inset
-            // one pixel from the true edge so the initial L is visible;
-            // edge is where each arm always extends out to.
-            const int brackets[4][4] = {
-                {1, 1, 0, 0},
-                {cfg::SCREEN_W - 2, 1, cfg::SCREEN_W - 1, 0},
-                {1, cfg::SCREEN_H - 2, 0, cfg::SCREEN_H - 1},
-                {cfg::SCREEN_W - 2, cfg::SCREEN_H - 2, cfg::SCREEN_W - 1, cfg::SCREEN_H - 1},
-            };
-            for (const auto& b : brackets) {
-                int startX = b[0], startY = b[1], edgeX = b[2], edgeY = b[3];
-                int vertexX = startX + (int)roundf((targetX - startX) * t);
-                int vertexY = startY + (int)roundf((targetY - startY) * t);
+            if (!m_shotResolved) {
+                if (sinceShotMs < kCrosshairFadeOutMs) {
+                    float fadeT = sinceShotMs / (float)kCrosshairFadeOutMs;
+                    CRGB fadingColor = CRGB::blend(kCrosshairColor, CRGB::Black, (uint8_t)(255 * fadeT));
+                    for (int x = 0; x < cfg::SCREEN_W; x++) if (x != targetX) offenseScreen(x, targetY) = fadingColor;
+                    for (int y = 0; y < cfg::SCREEN_H; y++) if (y != targetY) offenseScreen(targetX, y) = fadingColor;
+                } else {
+                    float growthMs = (float)(sinceShotMs - kCrosshairFadeOutMs);
+                    float gapScale = expf(-growthMs / kGrowthTauMs);
+                    drawConvergingCrosshair(offenseScreen, targetX, targetY, gapScale, kCrosshairRed);
+                }
+            } else {
+                const CRGB resultColor = m_pendingHit ? kHitRed : kMissWhite;
+                uint32_t sinceResolvedMs = millis() - m_shotResolvedMs;
 
-                int xLo = (edgeX < vertexX) ? edgeX : vertexX;
-                int xHi = (edgeX < vertexX) ? vertexX : edgeX;
-                for (int x = xLo; x <= xHi; x++) offenseScreen.setPixel(x, vertexY, kConvergeColor);
-
-                int yLo = (edgeY < vertexY) ? edgeY : vertexY;
-                int yHi = (edgeY < vertexY) ? vertexY : edgeY;
-                for (int y = yLo; y <= yHi; y++) offenseScreen.setPixel(vertexX, y, kConvergeColor);
+                if (sinceResolvedMs < kFadeToBlackMs) {
+                    float t = sinceResolvedMs / (float)kFadeToBlackMs;
+                    uint8_t fadeBy = (uint8_t)(255 * t);
+                    for (int y = 0; y < cfg::SCREEN_H; y++) {
+                        for (int x = 0; x < cfg::SCREEN_W; x++) {
+                            if (x == targetX && y == targetY) {
+                                offenseScreen(x, y) = CRGB::Black;
+                            } else {
+                                offenseScreen(x, y) = CRGB::blend(offenseScreen(x, y), CRGB::Black, fadeBy);
+                            }
+                        }
+                    }
+                } else if (sinceResolvedMs < kFadeToBlackMs + kFadeInTargetMs) {
+                    float t = (sinceResolvedMs - kFadeToBlackMs) / (float)kFadeInTargetMs;
+                    for (int y = 0; y < cfg::SCREEN_H; y++)
+                        for (int x = 0; x < cfg::SCREEN_W; x++)
+                            offenseScreen(x, y) = CRGB::Black;
+                    offenseScreen(targetX, targetY) = CRGB::blend(CRGB::Black, resultColor, (uint8_t)(255 * t));
+                } else if (sinceResolvedMs < kTotalRevealMs) {
+                    float t = (sinceResolvedMs - kFadeToBlackMs - kFadeInTargetMs) / (float)kFadeInRestMs;
+                    uint8_t keep = (uint8_t)(255 * t);
+                    for (int y = 0; y < cfg::SCREEN_H; y++) {
+                        for (int x = 0; x < cfg::SCREEN_W; x++) {
+                            if (x == targetX && y == targetY) {
+                                offenseScreen(x, y) = resultColor;
+                            } else {
+                                offenseScreen(x, y) = CRGB::blend(CRGB::Black, offenseScreen(x, y), keep);
+                            }
+                        }
+                    }
+                }
+                // else: reveal's fully played out -- normal board, held as-is
+                // until the caller advances past isShotRevealComplete().
             }
         }
 
@@ -258,17 +360,16 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // SHOOTING only: a slow, subtle white pulse over the whole defense
         // playing area, blended over whatever's currently drawn there
         // (background/ship/shot markers) -- reads as "under fire,
-        // resolving" without washing everything out to solid white. Also
-        // drives the bar's pulse below, on the same phase (there at full
-        // strength -- the bar's not showing ship/shot detail, so it can
-        // afford to be less subtle).
+        // resolving" without washing everything out to solid white. Kept
+        // dim (kDefenseFlashMaxWeight below) so it stays in the background
+        // relative to the offense's own crosshair/reveal animation.
         uint8_t shootingPulse = 0;
         if (m_state == GameState::SHOOTING) {
             constexpr uint32_t kShootingPulsePeriodMs = 1600;
             float phase = (millis() - m_shootingStartMs) / (float)kShootingPulsePeriodMs * TWO_PI;
             shootingPulse = (uint8_t)((sinf(phase) * 0.5f + 0.5f) * 255);
 
-            constexpr uint8_t kDefenseFlashMaxWeight = 130;   // subtle, but a clearly visible swing
+            constexpr uint8_t kDefenseFlashMaxWeight = 60;   // dim -- just a hint of "under fire"
             uint8_t flashWeight = (uint8_t)(((uint16_t)shootingPulse * kDefenseFlashMaxWeight) / 255);
             for (int y = 0; y < cfg::PLAYING_AREA_H; y++) {
                 for (int x = 0; x < cfg::PLAYING_AREA_W; x++) {
@@ -278,26 +379,34 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
             }
         }
 
-        // Top bar: during SHOOTING, pulse just the column that was fired at
-        // (shootingPulse, computed above; m_shotX rather than cx, since the
-        // offense's cursor isn't frozen and could have drifted since firing).
+        // Top bar: during SHOOTING, mirror the offense's crosshair row
+        // (Layer 4, above) onto the bar pixel-for-pixel, so the bar echoes
+        // the same fade/regrow sequence, rather than just pulsing a single
+        // column. The one exception is the target column itself: on the
+        // offense's own screen that pixel still shows the dim green sweep
+        // (Layer 4 only withholds the crosshair color there, not the
+        // background underneath) -- but the bar has no sweep of its own to
+        // explain a dim green pixel sitting there, so it'd just look like
+        // an unintended hint. Force it off instead, and only let it show
+        // through once the shot's resolved and Layer 4 is actively
+        // revealing it (black -> result color -- see Layer 4's Phase 3).
         // Otherwise, highlight the column the offense is currently aiming
         // at in red, black everywhere else -- lines up with the
         // crosshair's vertical arm since it shares the same x coordinate.
-        //
-        // The bar's columns map straight to physical columns (see
-        // Display::show()), but P1's screen is physically mirrored
-        // end-to-end there. It should match the defense's side, so flip the
-        // bar column whenever the defense is P1 (i.e. the offense is P2);
-        // when the defense is P2, whose screen isn't mirrored, use it as-is.
         if (m_state == GameState::SHOOTING) {
-            int shotBarCol = cfg::PLAYING_AREA_X0 + m_shotX;
-            if (defense == Player::P1) {
-                shotBarCol = cfg::SCREEN_W - 1 - shotBarCol;
+            int targetX = cfg::PLAYING_AREA_X0 + mirrorX(m_shotX);
+            int targetY = cfg::PLAYING_AREA_Y0 + m_shotY;
+            for (int x = 0; x < cfg::SCREEN_W; x++) {
+                bool withheld = (x == targetX) && !m_shotResolved;
+                m_display.bar()(x) = withheld ? CRGB::Black : offenseScreen(x, targetY);
             }
-            m_display.bar().clear();
-            m_display.bar()(shotBarCol) = CRGB(shootingPulse, 0, 0);
         } else {
+            // The bar's columns map straight to physical columns (see
+            // Display::show()), but P1's screen is physically mirrored
+            // end-to-end there. It should match the defense's side, so
+            // flip the bar column whenever the defense is P1 (i.e. the
+            // offense is P2); when the defense is P2, whose screen isn't
+            // mirrored, use it as-is.
             int barCol = cfg::PLAYING_AREA_X0 + cx;
             if (defense == Player::P1) {
                 barCol = cfg::SCREEN_W - 1 - barCol;
@@ -336,8 +445,20 @@ void Game::processDisplayUpdates(Ship& p1Ship, Ship& p2Ship) {
         // reflects P2's -- turns red the moment that player presses their
         // button and stays red (not just while held) so each player can
         // see the other is ready while waiting on their own press.
-        // Otherwise it shows the ambient color for the current game state.
+        // Otherwise it shows the ambient color for the current game state
+        // -- except IDLE, whose ambient is a slow, dim white breathing
+        // pulse instead of solid black, so the bar reads as "powered on,
+        // waiting for both players" rather than looking off. Each half
+        // still switches to solid red independently the moment that
+        // player confirms, same as any other state.
         CRGB stateColor = colorForState(m_state);
+        if (m_state == GameState::IDLE) {
+            constexpr uint32_t kIdlePulsePeriodMs = 3000;
+            constexpr uint8_t kIdlePulseMaxBrightness = 40; // lightly -- not a full-white flash
+            float phase = (millis() % kIdlePulsePeriodMs) / (float)kIdlePulsePeriodMs * TWO_PI;
+            uint8_t pulse = (uint8_t)((sinf(phase) * 0.5f + 0.5f) * kIdlePulseMaxBrightness);
+            stateColor = CRGB(pulse, pulse, pulse);
+        }
         CRGB p1BarColor = hasPressedButton(Player::P1) ? CRGB(255, 0, 0) : stateColor;
         CRGB p2BarColor = hasPressedButton(Player::P2) ? CRGB(255, 0, 0) : stateColor;
         int half = cfg::SCREEN_W / 2;

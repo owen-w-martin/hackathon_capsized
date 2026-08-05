@@ -18,7 +18,7 @@ namespace cfg {
     // TODO: tune to how long it actually takes to pop a capacitor at the Pop
     // current level; this is a safety cutoff for when the current never
     // drops (e.g. a wiring fault or a capacitor that won't pop).
-    constexpr uint32_t POP_TIMEOUT_MS = 20000;
+    constexpr uint32_t POP_TIMEOUT_MS = 8000;
 }
 
 enum class BoardStatus {
