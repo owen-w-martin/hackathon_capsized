@@ -21,14 +21,16 @@ public:
 
     // True once every cell of this ship has been hit.
     //
-    // CAREFUL: vacuously true for a ship with no cells at all -- std::all_of
-    // over an empty range returns true -- so a fleet that was never placed
-    // reads as "already sunk". Callers deciding a game has been won must
-    // also require cellCount() > 0; see the victory check in main.cpp.
+    // Note this is vacuously true for a ship with no cells at all --
+    // std::all_of over an empty range returns true -- so a fleet that was
+    // never placed reads as "already sunk". main.cpp keeps that from mattering
+    // by substituting a fake cell at SHIPSELECT for any player whose
+    // capacitor scan came back empty, so no empty fleet ever reaches play.
     bool checkIfNoCellsRemaining() const { return std::all_of(health.begin(), health.end(), [](bool h) { return !h; }); }
 
     // How many cells this ship was built with, alive or dead. Zero means no
-    // capacitors were detected for it -- see checkIfNoCellsRemaining().
+    // capacitors were detected for it -- see the SHIPSELECT fallback in
+    // main.cpp.
     size_t cellCount() const { return coords.size(); }
 
     // Adds a healthy cell at pos; for testing ship layouts without real

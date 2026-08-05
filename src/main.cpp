@@ -96,12 +96,22 @@ void loop() {
 
                     // A scan coming back empty means no capacitors were
                     // detected at all -- none placed, or a wiring/threshold
-                    // problem. Worth shouting about, because an empty fleet
-                    // can't be hit and can't legitimately be sunk; the
-                    // cellCount() guard on the victory check below is what
-                    // keeps it from reading as an instant win instead.
-                    if (p1Ship.cellCount() == 0) Serial.println("WARNING: P1 scan found no capacitors");
-                    if (p2Ship.cellCount() == 0) Serial.println("WARNING: P2 scan found no capacitors");
+                    // problem. An empty fleet can't be hit, so the game would
+                    // otherwise run forever on guaranteed misses; drop in a
+                    // single cell near the middle of that player's own board
+                    // so the rig stays playable and winnable. Announced on
+                    // serial so a stand-in fleet is never mistaken for a real
+                    // one.
+                    constexpr int kFallbackX = cfg::PLAYING_AREA_W / 2;
+                    constexpr int kFallbackY = cfg::PLAYING_AREA_H / 2;
+                    if (p1Ship.cellCount() == 0) {
+                        Serial.println("WARNING: P1 scan found no capacitors -- substituting a fake 1-cell ship");
+                        p1Ship.addCell({kFallbackX, kFallbackY});
+                    }
+                    if (p2Ship.cellCount() == 0) {
+                        Serial.println("WARNING: P2 scan found no capacitors -- substituting a fake 1-cell ship");
+                        p2Ship.addCell({kFallbackX, kFallbackY});
+                    }
 
                     game.setCurrentPlayer(core::Player::P1);
                     game.setState(core::GameState::SELECTING);
@@ -195,20 +205,21 @@ void loop() {
                 core::Player justFired = game.getCurrentPlayer();
                 core::Player defense = core::otherPlayer(justFired);
                 Ship& defenseShip = (defense == core::Player::P1) ? p1Ship : p2Ship;
-                // The cellCount() > 0 half is load-bearing:
-                // checkIfNoCellsRemaining() is vacuously true for a ship with
-                // no cells, so without it a scan that found no capacitors
-                // would hand the game to whoever happened to shoot first.
+                // No guard against an empty fleet here on purpose: SHIPSELECT
+                // substitutes a fake cell for any player whose scan came back
+                // empty, so by this point every fleet has at least one cell.
+                // Should one ever slip through anyway,
+                // checkIfNoCellsRemaining() is vacuously true for an empty
+                // ship and this just ends the game -- which beats running an
+                // unwinnable one.
                 //
                 // NOTE: this assumes ships are built once (at SHIPSELECT) and
                 // damage lives in Ship::health, which is how it works today.
                 // If the per-turn rescan in SELECTING above is ever switched
-                // back on, ships get rebuilt from surviving capacitors and a
-                // sunk fleet legitimately IS an empty one -- at which point
-                // this guard would make the game unwinnable and the check
-                // needs rethinking (compare against the fleet's size at
-                // SHIPSELECT rather than requiring it to be non-empty now).
-                bool won = defenseShip.cellCount() > 0 && defenseShip.checkIfNoCellsRemaining();
+                // back on, ships get rebuilt from surviving capacitors and the
+                // SHIPSELECT fallback would start resurrecting sunk fleets
+                // mid-game -- both would need rethinking together.
+                bool won = defenseShip.checkIfNoCellsRemaining();
                 if (won) {
                     game.setWinner(justFired);
                     game.setState(core::GameState::ENDSCREEN);
