@@ -113,61 +113,60 @@ void drawConvergingCrosshair(PlayerScreen& screen, int targetX, int targetY, flo
     }
 }
 
-// End-screen letters, one string per row with row 0 at the TOP of the panel.
-// Drawn across the full screen rather than just the 10x10 playing area so
-// they're as large as the hardware allows -- there's no board to show here
-// any more, so the border ring is free real estate.
-static_assert(cfg::SCREEN_W == 12 && cfg::SCREEN_H == 12,
-              "end-screen letters are hand-drawn for a 12x12 panel");
+// End-screen letters, one string per row with row 0 at the TOP. Sized to the
+// 10x10 playing area rather than the whole panel, and drawn at its offset, so
+// the 1-pixel border ring stays dark exactly as it does during play.
+static_assert(cfg::PLAYING_AREA_W == 10 && cfg::PLAYING_AREA_H == 10,
+              "end-screen letters are hand-drawn for a 10x10 playing area");
 
-// Two vees sharing a centre peak. Deliberately left-right symmetric, so it
-// reads as a W no matter which way round a panel ends up wired.
-const char* const kGlyphWin[cfg::SCREEN_H] = {
-    "110000000011",
-    "110000000011",
-    "011000000110",
-    "011000000110",
-    "011001100110",
-    "011001100110",
-    "001110011100",
-    "001110011100",
-    "001110011100",
-    "001110011100",
-    "000110011000",
-    "000110011000",
+// Two vees sharing a centre peak: the outer arms alone up top, the peak
+// emerging between them, then arms and peak converging into two feet.
+// Deliberately left-right symmetric, so it reads as a W no matter which way
+// round a panel ends up wired.
+const char* const kGlyphWin[cfg::PLAYING_AREA_H] = {
+    "1100000011",
+    "1100000011",
+    "1100000011",
+    "0110110110",
+    "0110110110",
+    "0110110110",
+    "0110110110",
+    "0011001100",
+    "0011001100",
+    "0011001100",
 };
 
-// Two-pixel-wide stem down the left, two-pixel foot along the bottom.
-const char* const kGlyphLose[cfg::SCREEN_H] = {
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001100000000",
-    "001111111100",
-    "001111111100",
+// Two-pixel stem down the left, two-pixel foot along the bottom, inset to
+// leave matching margins either side.
+const char* const kGlyphLose[cfg::PLAYING_AREA_H] = {
+    "0011000000",
+    "0011000000",
+    "0011000000",
+    "0011000000",
+    "0011000000",
+    "0011000000",
+    "0011000000",
+    "0011000000",
+    "0011111100",
+    "0011111100",
 };
 
-// Paints one letter onto a panel in a single colour.
+// Paints one letter into the playing area in a single colour, leaving the
+// surrounding border ring untouched.
 //
 // y counts up from the bottom of the screen while the bitmaps above read
-// top-down, hence the SCREEN_H-1-row flip. No per-player x mirror: both
+// top-down, hence the PLAYING_AREA_H-1-row flip. No per-player x mirror: both
 // panels turned out to use the exact same transform on the real rig, in
 // spite of what Display::show()'s arithmetic suggests -- see the panel_pos
 // note in tools/display_mirror.py. If a rewired panel ever does come out
 // backwards, the W is symmetric and unaffected; reverse kGlyphLose's strings
 // to fix the L.
 void drawGlyph(PlayerScreen& screen, const char* const rows[], CRGB color) {
-    for (int row = 0; row < cfg::SCREEN_H; row++) {
+    for (int row = 0; row < cfg::PLAYING_AREA_H; row++) {
         const char* bits = rows[row];
-        int y = cfg::SCREEN_H - 1 - row;
-        for (int x = 0; x < cfg::SCREEN_W; x++) {
-            if (bits[x] == '1') screen(x, y) = color;
+        int y = cfg::PLAYING_AREA_Y0 + (cfg::PLAYING_AREA_H - 1 - row);
+        for (int x = 0; x < cfg::PLAYING_AREA_W; x++) {
+            if (bits[x] == '1') screen(cfg::PLAYING_AREA_X0 + x, y) = color;
         }
     }
 }
